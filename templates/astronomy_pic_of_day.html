@@ -1,0 +1,50 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/astr_pic_of_day.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Astronomy picture of the day</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+
+  <main>
+
+    <h3 style="text-align: center;" class="text-body-emphasis">{{json["title"]}}</h3>
+    {% if copyright_details != "" %}
+    <h5 style="text-align: center;font-weight:normal"><i>({{ copyright_details }})</i></h5>
+    {% endif %}
+
+    <hr class="col-3 col-md-2 mb-5">
+
+    <div class="row g-5">
+      {% if error_msg == "" %}
+        <h5 style="text-align: center;font-weight:normal">{{ json["explanation"] }}<br><br>Media type: {{ json["media_type"] }}<br>Service version: {{ json["service_version"] }} </h5>
+        <h5 style="text-align: center;">View picture: <a href="{{json["hdurl"]}}" rel="noopener" >High definition (HD)</a> or <a href="{{json["url"]}}" rel="noopener">Standard definition (SD)</a></h5>
+
+      {% else %}
+          <p style="text-align: center;">{{error_msg}}</p>
+      {% endif %}
+    </div>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Data copyrighted by Laura Rowe (Used with permission); Picture manifestation courtesy of https://apod.nasa.gov</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body></html>
+
+

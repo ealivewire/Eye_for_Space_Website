@@ -1,0 +1,69 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/planets.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Confirmed Planets<br>(Discovery Year = {{ disc_year }})</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+    {% if error_msg == "" %}
+      <table style="width: 100%; margin-left:auto; margin-right:auto">
+<!--        <colgroup>-->
+<!--          <col span="1" style="width: 50%;">-->
+<!--          <col span="1" style="width: 50%;">-->
+<!--        </colgroup>-->
+        <tr>
+          <th style="font-size: 1rem"></th>
+          <th style="font-size: 1rem">Host Name</th>
+          <th style="font-size: 1rem">Host # of Stars</th>
+          <th style="font-size: 1rem">Host # of Planets/th>
+          <th style="font-size: 1rem">Planet Name<br>(Click to view details)</th>
+          <th style="font-size: 1rem">Discovery Method</th>
+          <th style="font-size: 1rem">Discovery Facility</th>
+          <th style="font-size: 1rem">Discovery Telescope</th>
+        </tr>
+        {% for planet in confirmed_planets_details %}
+          <tr>
+              <td style="font-size: 1rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"></td>
+              <td style="font-size: 1rem">{{ planet.host_name }}</td>
+              <td style="font-size: 1rem">{{ planet.host_num_stars }}</td>
+              <td style="font-size: 1rem">{{ planet.host_num_planets }}</td>
+              <td style="font-size: 1rem"><a href="{{ planet.url }}" rel="noopener">{{ planet.planet_name }}</a></td>
+              <td style="font-size: 1rem">{{ planet.discovery_method }}</td>
+              <td style="font-size: 1rem">{{ planet.discovery_facility }}</td>
+              <td style="font-size: 1rem">{{ planet.discovery_telescope }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+        <p style="text-align: center;font-weight:normal">{{ error_msg }}</p>
+      {% endif %}
+      <br>
+      <h5><form>
+         <button style="display: block; margin: auto; background-color:red; color:white; font-weight:bold" type="submit" formaction="{{url_for('confirmed_planets')}}">Return to Confirmed Planets Page</button>
+      </form></h5>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program. Reference: DOI #10.26133/NEA12</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+

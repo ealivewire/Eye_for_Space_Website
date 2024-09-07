@@ -1,0 +1,67 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/space_news.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Space News</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <h2 style="text-align: center;">Latest News Articles:</h2><br>
+  <main>
+    {% if success %}
+    <table style="width: 100%; margin-left:auto; margin-right:auto">
+      <colgroup>
+          <col span="1" style="width: 5%;">
+          <col span="1" style="width: 20%;">
+          <col span="1" style="width: 15%;">
+          <col span="1" style="width: 40%;">
+          <col span="1" style="width: 10%;">
+          <col span="1" style="width: 10%;">
+      </colgroup>
+      <tr>
+        <th style="font-size: 1rem"></th>
+        <th style="font-size: 1rem">Title<br>(Click to view article)</th>
+        <th style="font-size: 1rem">News Site</th>
+        <th style="font-size: 1rem">Summary</th>
+        <th style="font-size: 1rem">Published</th>
+        <th style="font-size: 1rem">Updated</th>
+      </tr>
+      {% for article in articles %}
+          <tr>
+            <td style="font-size: 1rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"></td>
+            <td style="font-size: 1rem"><a href={{article.url}} rel="noopener"><b>{{ article.title }}</b></a></td>
+            <td style="font-size: 1rem">{{ article.news_site }}</td>
+            <td style="font-size: 1rem">{{ article.summary }}</td>
+            <td style="font-size: 1rem">{{ article.date_time_published }}</td>
+            <td style="font-size: 1rem">{{ article.date_time_updated }}</td>
+          </tr>
+      {% endfor %}
+
+    </table>
+    {% else %}
+        <p>{{error_msg}}</p>
+    {% endif %}
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Data courtesy of Spaceflight News API (SNAPI), a product by The Space Devs (TSD)</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+

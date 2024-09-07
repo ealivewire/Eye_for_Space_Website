@@ -1,0 +1,45 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/iss.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Where is the International Space Station (ISS) now?</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <h2 style="text-align: center;" >About the ISS:</h2>
+  <h5 style="text-align: center;;font-weight:normal" >The International Space Station (ISS) is a large space station assembled and maintained in low Earth orbit by a collaboration of five space agencies and their contractors: NASA (United States), Roscosmos (Russia), ESA (Europe), JAXA (Japan), and CSA (Canada). The ISS is the largest space station ever built. Its primary purpose is to perform microgravity and space environment experiments. (source: wikipedia.org)</h5><br>
+  <main>
+      <h2 style="text-align: center;">Current Terrestrial Address:</h2>
+      <h5 style="text-align: center;font-weight:normal">{{ location_address }}</h5>
+      <br>
+      {% if has_url %}
+        <h2 style="text-align: center;"><a style="text-align: center" href="{{ location_url }}" rel="noopener">Click here to view map</a></h2>
+        <h5 style="color: red;text-align: center;">(Zoom out on map to get a better view of where the ISS is at.)</h5>
+      {% endif %}
+
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Data courtesy of Nathan Bergey (@natronics) and © OpenStreetMap contributors, ODbL 1.0<br>
+      Reverse Geocoding courtesy of Map Maker by My Maps Inc. © Copyright 2008-2024 All Rights Reserved<br>
+      Maps: @2024 Google</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+

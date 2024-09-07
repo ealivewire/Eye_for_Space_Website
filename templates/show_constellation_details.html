@@ -1,0 +1,80 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/constellations.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Constellation: {{ constellation_details.name }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+      <table style="width: 80%; margin-left:auto; margin-right:auto">
+        <colgroup>
+          <col span="1" style="width: 50%;">
+          <col span="1" style="width: 50%;">
+        </colgroup>
+        <tr>
+            <td style="font-weight:bold">Name</td>
+            <td>{{ constellation_details.name }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">Abbreviation</td>
+            <td>{{ constellation_details.abbreviation }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">Nickname</td>
+            <td>{{ constellation_details.nickname }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">Full Details</td>
+            <td><a href="{{ constellation_details.url }}" rel="noopener">Click here to view</a></td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">Area</td>
+            <td>{{ constellation_details.area }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">Mythological Association</td>
+            <td>{{ constellation_details.myth_assoc }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold;">First Appearance</td>
+            <td>{{ constellation_details.first_appear }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold">Brightest Star Name</td>
+            <td>{{ constellation_details.brightest_star_name }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight:bold">Brightest Star Details</td>
+            <td><a href="{{ constellation_details.brightest_star_url }}" rel="noopener">Click here to view</a></td>
+        </tr>
+
+      </table>
+      <br>
+      <h5><form>
+         <button style="display: block; margin: auto; background-color:red; color:white; font-weight:bold" type="submit" formaction="{{url_for('constellations')}}">Return to Constellations Page</button>
+      </form></h5>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Data courtesy of: 1) Skyfield, 2) © Dominic Ford 2011–2024.; Maps: GO ASTRONOMY © 2024</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+

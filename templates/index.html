@@ -1,0 +1,62 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/space.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Welcome to<br>Eye for Space!</h1>
+          <span class="subheading">Serving space enthusiasts like you</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+    <h3 style="width: 80%; margin-left:auto; margin-right:auto">Here you will find insight pertaining to various points of interest for you space enthusiasts!</h3><br>
+      <table style="width: 80%; margin-left:auto; margin-right:auto">
+        <colgroup>
+          <col span="1" style="width: 50%;">
+          <col span="1" style="width: 50%;">
+        </colgroup>
+        <tr >
+            <th style="font-size: 2rem;font-weight:bold">THE LATEST</th>
+            <th style="font-size: 2rem;font-weight:bold">THE DEEP DIVE</th>
+        </tr>
+        <tr>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('space_news') }}" rel="noopener">Space news</a></td>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('mars_photos') }}" rel="noopener">Photos from Mars</a></td>
+        </tr>
+        <tr>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('where_is_iss') }}" rel="noopener">Where is the ISS?</a></td>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('constellations') }}" rel="noopener">Constellations</a></td>
+        </tr>
+        <tr>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('who_is_in_space_now') }}" rel="noopener">Who is in space now?</a></td>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('confirmed_planets') }}" rel="noopener">Confirmed planets</a></td>
+        </tr>
+        <tr>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('astronomy_pic_of_day') }}" rel="noopener">Astronomy picture of the day</a></td>
+            <td style="font-size: 1.5rem"></td>
+        </tr>
+        <tr>
+            <td style="font-size: 1.5rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"> <a href="{{ url_for('approaching_asteroids') }}" rel="noopener">Approaching Asteroids</a></td>
+            <td style="font-size: 1.5rem"></td>
+        </tr>
+
+      </table>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body></html>
+
+

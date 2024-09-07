@@ -1,0 +1,89 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/asteroid.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Approaching Asteroids<br>(Close Approach Date = {{ close_approach_date }})</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+    {% if error_msg == "" %}
+      <table style="width: 100%; margin-left:auto; margin-right:auto">
+        <colgroup>
+          <col span="1" style="width: 8%;">
+          <col span="1" style="width: 15%;">
+          <col span="1" style="width: 9%;">
+          <col span="1" style="width: 9%;">
+          <col span="1" style="width: 9%;">
+          <col span="1" style="width: 8%;">
+          <col span="1" style="width: 8%;">
+          <col span="1" style="width: 15%;">
+          <col span="1" style="width: 8%;">
+          <col span="1" style="width: 5%;">
+        </colgroup>
+        <tr>
+          <th style="font-size: 1rem">Close Approach Date</th>
+          <th style="font-size: 1rem">Name<br>(Click to View Details)</th>
+          <th style="font-size: 1rem">ID</th>
+          <th style="font-size: 1rem">Absolute Magnitude (H)</th>
+          <th style="font-size: 1rem">Estimated Diameter in Km (Min/Max)</th>
+          <th style="font-size: 1rem">Is Potentially Hazardous?</th>
+          <th style="font-size: 1rem">Relative Velocity (Km/s)</th>
+          <th style="font-size: 1rem">Miss Distance (Km)</th>
+          <th style="font-size: 1rem">Orbiting Body</th>
+          <th style="font-size: 1rem">Is Sentry Object?</th>
+        </tr>
+        {% for asteroid in approaching_asteroids_details %}
+          <tr>
+              <td style="font-size: 1rem">{{ asteroid.close_approach_date }}</td>
+              <td style="font-size: 1rem"><a href="{{ asteroid.url }}" rel="noopener">{{ asteroid.name }}</a></td>
+              <td style="font-size: 1rem">{{ asteroid.id }}</td>
+              <td style="font-size: 1rem">{{ "{:.2f}".format(asteroid.absolute_magnitude_h | round(2)) }}</td>
+              <td style="font-size: 1rem">{{ "{:.2f}".format(asteroid.estimated_diameter_km_min | round(2)) }} / {{ "{:.2f}".format(asteroid.estimated_diameter_km_max | round(2)) }}</td>
+              {% if asteroid.is_potentially_hazardous == 0: %}
+                <td style="font-size: 1rem">No</td>
+              {% elif asteroid.is_potentially_hazardous == 1: %}
+                <td style="font-size: 1rem">Yes</td>
+              {% endif %}
+              <td style="font-size: 1rem">{{ "{:.2f}".format(asteroid.relative_velocity_km_per_s | round(2)) }}</td>
+              <td style="font-size: 1rem">{{ "{:.2f}".format(asteroid.miss_distance_km | round(2)) }}</td>
+              <td style="font-size: 1rem">{{ asteroid.orbiting_body }}</td>
+              {% if asteroid.is_sentry_object == 0: %}
+                <td style="font-size: 1rem">No</td>
+              {% elif asteroid.is_sentry_object == 1: %}
+                <td style="font-size: 1rem">Yes</td>
+              {% endif %}
+          </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+        <p style="text-align: center;font-weight:normal">{{ error_msg }}</p>
+      {% endif %}
+      <br>
+      <h5><form>
+         <button style="display: block; margin: auto; background-color:red; color:white; font-weight:bold" type="submit" formaction="{{url_for('approaching_asteroids')}}">Return to Approaching Asteroids Page</button>
+      </form></h5>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program. Reference: DOI #10.26133/NEA12</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+
