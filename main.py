@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 import os
 import glob
 import operator
+from data import spreadsheet_attributes
 
 # from tkinter import messagebox
 
@@ -246,8 +247,7 @@ class ViewConstellationForm(FlaskForm):
 
 # Configure form for viewing "Mars photos" data online (on dedicated web page):
 class ViewMarsPhotosForm(FlaskForm):
-    list_rover_name = SelectField("Select Rover Name:", choices=[], validate_choice=False)
-    list_earth_date = SelectField("Select Earth Date:", choices=[], validate_choice=False)
+    list_rover_earth_date_combo = SelectField("Select Rover Name / Earth Date Combination:", choices=[], validate_choice=False)
     button_submit = SubmitField(label="View List of Photos")
 
 
@@ -431,35 +431,30 @@ def mars_photos():
     # Instantiate an instance of the "DisplayMarsPhotosSheetForm" class:
     form_ss = DisplayMarsPhotosSheetForm()
 
-    # Populate the rover name listbox with an ordered of active rover names:
-    form.list_rover_name.choices = db.session.execute(db.select(MarsRovers.rover_name).where(MarsRovers.active == "Yes").order_by(MarsRovers.rover_name)).scalars().all()
-
-    # Populate the earth date listbox with an ordered of earth dates where the selected rover has produced photos:
-    form.list_earth_date.choices = db.session.query(distinct(MarsPhotosAvailable.earth_date)).where(MarsPhotosAvailable.rover_name == form.list_rover_name.data).order_by(MarsPhotosAvailable.earth_date.desc()).all()
-
-    # list_discovery_years = []
-    # discovery_years = db.session.query(distinct(ConfirmedPlanets.discovery_year)).order_by(ConfirmedPlanets.discovery_year.desc()).all()
-    # for year in discovery_years:
-    #     list_discovery_years.append(int(str(year)[1:5]))
-    # form.list_discovery_year.choices = list_discovery_years
+    # Populate the rover name / earth date combo listbox with an ordered list of such combinations:
+    list_rover_earth_date_combos = []
+    rover_earth_date_combos = db.session.query(distinct(MarsPhotosAvailable.rover_earth_date_combo)).order_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date.desc()).all()
+    for rover_earth_date_combo in rover_earth_date_combos:
+        list_rover_earth_date_combos.append(str(rover_earth_date_combo).split("'")[1])
+    form.list_rover_earth_date_combo.choices = list_rover_earth_date_combos
 
     # Populate the Mars photos sheet file listbox with all filenames of spreadsheets pertinent to this scope:
     form_ss.list_mars_photos_sheet_name.choices = glob.glob("Mars Photos*.xlsx")
 
     # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
     if form.validate_on_submit():
-        if form.list_discovery_year.data != None:
+        if form.list_rover_earth_date_combo.data != None:
             error_msg = ""
-            # Retrieve the record from the database which pertains to confirmed planets discovered in the selected year:
-            confirmed_planets_details = retrieve_from_database(trans_type="confirmed_planets_by_disc_year", disc_year=form.list_discovery_year.data)
+            # Retrieve the record from the database which pertains to Mars photos taken via the selected rover / earth date combo:
+            mars_photos_details = retrieve_from_database(trans_type="mars_photos_by_rover_earth_date_combo", rover_earth_date_combo=form.list_rover_earth_date_combo.data)
 
-            if confirmed_planets_details == {}:
+            if mars_photos_details == {}:
                 error_msg = "Error: Data could not be obtained at this time."
-            elif confirmed_planets_details == []:
+            elif mars_photos_details == []:
                 error_msg = "No matching records were retrieved."
 
-            # Show web page with retrieved constellation details:
-            return render_template('show_confirmed_planets_details.html', confirmed_planets_details=confirmed_planets_details, disc_year=form.list_discovery_year.data, error_msg=error_msg)
+            # Show web page with retrieved photo details:
+            return render_template('show_mars_photos_details.html', mars_photos_details=mars_photos_details, rover_earth_date_combo=form.list_rover_earth_date_combo.data, error_msg=error_msg)
 
         else:
             # Open the selected spreadsheet file:
@@ -547,112 +542,43 @@ def create_worksheet(workbook, worksheet_name):
     return workbook.add_worksheet(worksheet_name)
 
 
-def export_approaching_asteroids_data_to_spreadsheet(approaching_asteroids_data):
-    """Function to export approaching-asteroids data to a spreadsheet, with all appropriate formatting applied"""
+def export_data_to_spreadsheet_standard(data_scope, data_to_export):
+    """Function to export data to a spreadsheet, with all appropriate formatting applied"""
     try:
         # Capture current date/time:
         current_date_time = datetime.now()
         current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
 
         # Create the workbook:
-        approaching_asteroids_workbook = create_workbook(f"ApproachingAsteroids.xlsx")
+        workbook = create_workbook(f"{spreadsheet_attributes[data_scope]["wrkbk_name"]}")
 
-        # Create the worksheet to contain approaching-asteroids data from the "approaching_asteroids_data" variable:
-        approaching_asteroids_worksheet = create_worksheet(approaching_asteroids_workbook, "Approaching Asteroids")
+        # Create the worksheet to contain data from the "data_to_export" variable:
+        worksheet = create_worksheet(workbook, spreadsheet_attributes[data_scope]["wksht_name"])
 
         # Add and format the column headers:
-        prepare_spreadsheet_main_contents(approaching_asteroids_workbook, approaching_asteroids_worksheet, "approaching_asteroids_headers")
+        prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["headers"])
 
-        # Iterate through the "approaching_asteroids_data" variable and write/format each asteroid's data into the worksheet:
-        prepare_spreadsheet_main_contents(approaching_asteroids_workbook, approaching_asteroids_worksheet, "approaching_asteroids_data", list_name=approaching_asteroids_data)
+        # Iterate through the "data_to_export" variable and write/format each asteroid's data into the worksheet:
+        if data_scope == "constellations":
+            i = 3
+            for key in data_to_export:
+                prepare_spreadsheet_main_contents(workbook, worksheet, "constellation_data",dict_name=data_to_export, key=key, i=i)
+                i += 1
+        else:
+            prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["data_to_export_name"], list_name=data_to_export)
 
         # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-        prepare_spreadsheet_supplemental_formatting(approaching_asteroids_workbook, approaching_asteroids_worksheet, "approaching_asteroids", current_date_time_spreadsheet, approaching_asteroids_data, 11, (12, 20, 10, 15, 15, 15, 15, 12, 12, 10, 10, 65) )
+        prepare_spreadsheet_supplemental_formatting(workbook, worksheet, spreadsheet_attributes[data_scope]["supp_fmtg"], current_date_time_spreadsheet, data_to_export, spreadsheet_attributes[data_scope]["num_cols_minus_one"], spreadsheet_attributes[data_scope]["col_widths"] )
 
         # Close the workbook, checking if the file is open:
-        close_workbook(approaching_asteroids_workbook)
+        close_workbook(workbook)
 
         # Return successful-execution indication to the calling function:
         return True
 
     except Exception as err:  # An error has occurred.
         # Print error message:
-        print(f"Error (Export Approaching Asteroids Data to SS: {err}")
-
-        # Return failed-execution indication to the calling function:
-        return False
-
-
-def export_confirmed_planets_data_to_spreadsheet(confirmed_planets_data):
-    """Function to export confirmed-planet data to a spreadsheet, with all appropriate formatting applied"""
-    try:
-        # Capture current date/time:
-        current_date_time = datetime.now()
-        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
-
-        # Create the workbook:
-        confirmed_planets_workbook = create_workbook(f"ConfirmedPlanets.xlsx")
-
-        # Create the worksheet to contain confirmed-planet data from the "confirmed_planets_data" variable:
-        confirmed_planets_worksheet = create_worksheet(confirmed_planets_workbook, "Confirmed Planets")
-
-        # Add and format the column headers:
-        prepare_spreadsheet_main_contents(confirmed_planets_workbook, confirmed_planets_worksheet, "confirmed_planets_headers")
-
-        # Iterate through the "confirmed_planets_data" variable and write/format each planet's data into the worksheet:
-        prepare_spreadsheet_main_contents(confirmed_planets_workbook, confirmed_planets_worksheet, "confirmed_planets_data", list_name=confirmed_planets_data)
-
-        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-        prepare_spreadsheet_supplemental_formatting(confirmed_planets_workbook, confirmed_planets_worksheet, "confirmed_planets", current_date_time_spreadsheet, confirmed_planets_data, 8, (15, 10, 10, 15, 10, 15, 30, 20, 65) )
-
-        # Close the workbook, checking if the file is open:
-        close_workbook(confirmed_planets_workbook)
-
-        # Return successful-execution indication to the calling function:
-        return True
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Export Confirmed Planets Data to SS: {err}")
-
-        # Return failed-execution indication to the calling function:
-        return False
-
-
-def export_constellation_data_to_spreadsheet(constellations_data):
-    """Function to export constellation data to a spreadsheet, with all appropriate formatting applied"""
-    try:
-        # Capture current date/time:
-        current_date_time = datetime.now()
-        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
-
-        # Create the workbook:
-        constellation_workbook = create_workbook(f"Constellations.xlsx")
-
-        # Create the worksheet to contain constellation data from the "constellation_data" variable:
-        constellation_worksheet = create_worksheet(constellation_workbook, "Constellations")
-
-        # Add and format the column headers:
-        prepare_spreadsheet_main_contents(constellation_workbook, constellation_worksheet, "constellation_headers")
-
-        # Iterate through the "constellation_data" variable and write/format each constellation's data into the worksheet:
-        i = 3
-        for key in constellations_data:
-            prepare_spreadsheet_main_contents(constellation_workbook, constellation_worksheet, "constellation_data", dict_name=constellations_data, key=key, i=i)
-            i += 1
-
-        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-        prepare_spreadsheet_supplemental_formatting(constellation_workbook, constellation_worksheet, "constellations", current_date_time_spreadsheet, constellations_data, 7, (15, 7.8, 15, 75, 15, 20, 15, 53) )
-
-        # Close the workbook, checking if the file is open:
-        close_workbook(constellation_workbook)
-
-        # Return successful-execution indication to the calling function:
-        return True
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Export Constellation Data to SS: {err}")
+        print(f"Error (Export '{data_scope}' Data to SS: {err}")
 
         # Return failed-execution indication to the calling function:
         return False
@@ -690,12 +616,12 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
 
         # For each rover, create and format a worksheet to contain details for available photos
         # taken by that rover each earth year:
-        rovers_represented = []
+        # rovers_represented = []
         rovers_represented = get_mars_photos_summarize_photo_counts_by_rover_and_earth_year()
         if rovers_represented == []:
             exit()
 
-        print(rovers_represented)
+        # print(rovers_represented)
         # print(len(rovers_represented))
 
         # rovers_represented[1] = ('Opportunity', 30000)
@@ -726,7 +652,7 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
 
         # for item in worksheets_needed:
         #     print(item)
-        print(worksheets_needed)
+        # print(worksheets_needed)
         # print(len(worksheets_needed))
 
         # exit()
@@ -792,7 +718,7 @@ def get_confirmed_planets():
                 exit()
 
             # Create and format a spreadsheet file (workbook) to contain all confirmed-planet data. If the function called returns an empty directory, end this procedure:
-            if not export_confirmed_planets_data_to_spreadsheet(confirmed_planets_data):
+            if not export_data_to_spreadsheet_standard("confirmed_planets", confirmed_planets_data):
                 exit()
 
     except Exception as err:
@@ -844,7 +770,7 @@ def get_constellation_data():
                 exit()
 
             # Create and format a spreadsheet file (workbook) to contain all constellation data. If the function called returns an empty directory, end this procedure:
-            if not export_constellation_data_to_spreadsheet(constellations_data):
+            if not export_data_to_spreadsheet_standard("constellations", constellations_data):
                 exit()
 
         except Exception as err:
@@ -1166,7 +1092,7 @@ def get_approaching_asteroids():
                 exit()
 
             # Create and format a spreadsheet file (workbook) to contain all asteroids data. If the function called returns an empty directory, end this procedure:
-            if not export_approaching_asteroids_data_to_spreadsheet(asteroids_data):
+            if not export_data_to_spreadsheet_standard("approaching_asteroids", asteroids_data):
                 exit()
 
             # Return the populated "asteroids" list:
@@ -1556,17 +1482,16 @@ def prepare_spreadsheet_supplemental_formatting(workbook, worksheet, name, curre
 
 def prepare_spreadsheet_get_format(workbook, name):
     """Function for identifying the format to be used in formatting content in spreadsheet, based on the type of content involved"""
-    if name == "column_headers":
-        # Identify formatting applicable to the column headers:
+    if name == "column_headers":  # Column headers
         return workbook.add_format({"bold": 3, "underline": True, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
 
-    elif name == "data":
+    elif name == "data":  # Main body of data (excluding columns to be treated as active URLs)
         return workbook.add_format({"bold": 0, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
 
-    elif name == "url":
+    elif name == "url":  # URLs
         return workbook.add_format({"bold": 0, "font_color": "blue", "underline": 1, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
 
-    elif name == "spreadsheet_header":
+    elif name == "spreadsheet_header":  # Header info. (e.g., title, generation date/time) at beginning of spreadsheet
         return workbook.add_format({"bold": 3, "font_name": "Calibri", "font_size": 16})
 
 
@@ -2142,6 +2067,13 @@ def retrieve_from_database(trans_type, **kwargs):
 
             elif trans_type == "mars_photo_details_get_counts_by_rover_and_earth_date":
                 return db.session.query(MarsPhotosAvailable).with_entities(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date, MarsPhotosAvailable.total_photos).group_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date).order_by(MarsPhotosAvailable.rover_name,MarsPhotosAvailable.earth_date.desc()).all()
+
+            elif trans_type == "mars_photos_by_rover_earth_date_combo":
+                # Capture optional arguments:
+                rover_earth_date_combo = kwargs.get("rover_earth_date_combo", None)
+
+                # Retrieve all existing records from the "mars_photo_details" database table where the "rover_earth_date_combo" field matches the passed parameter:
+                return db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_earth_date_combo).order_by(MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
 
             elif trans_type == "mars_rovers":
                 # Retrieve all existing records from the "mars_rovers" database table where rovers are tagged as active (in terms of data production):

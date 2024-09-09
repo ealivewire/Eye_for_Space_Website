@@ -34,6 +34,7 @@
           <col span="1" style="width: 5%;">
         </colgroup>
         <tr>
+          <th style="font-size: 1rem"></th>
           <th style="font-size: 1rem">Close Approach Date</th>
           <th style="font-size: 1rem">Name<br>(Click to View Details)</th>
           <th style="font-size: 1rem">ID</th>
@@ -47,6 +48,7 @@
         </tr>
         {% for asteroid in approaching_asteroids_details %}
           <tr>
+              <td style="font-size: 1rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"></td>
               <td style="font-size: 1rem">{{ asteroid.close_approach_date }}</td>
               <td style="font-size: 1rem"><a href="{{ asteroid.url }}" rel="noopener">{{ asteroid.name }}</a></td>
               <td style="font-size: 1rem">{{ asteroid.id }}</td>

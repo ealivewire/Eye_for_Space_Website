@@ -1,0 +1,63 @@
+{% include "header.html" %}
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/mars_photos.jpg')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Photos from Mars<br>(Rover Name / Earth Date = {{ rover_earth_date_combo }})</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+    {% if error_msg == "" %}
+      <table style="width: 100%; margin-left:auto; margin-right:auto">
+<!--        <colgroup>-->
+<!--          <col span="1" style="width: 50%;">-->
+<!--          <col span="1" style="width: 50%;">-->
+<!--        </colgroup>-->
+        <tr>
+          <th style="font-size: 1rem"></th>
+          <th style="font-size: 1rem">SOL</th>
+          <th style="font-size: 1rem">Pic ID<br>(Click to view details)</th>
+          <th style="font-size: 1rem">Camera Name</th>
+          <th style="font-size: 1rem">Camera Full Name</th>
+        </tr>
+        {% for photo in mars_photos_details %}
+          <tr>
+              <td style="font-size: 1rem"><img src="{{ url_for('static', filename='assets/favicon.ico') }}" width="30rem" height="30rem"></td>
+              <td style="font-size: 1rem">{{ photo.sol }}</td>
+              <td style="font-size: 1rem"><a href="{{ photo.url }}" rel="noopener">{{ photo.pic_id }}</a></td>
+              <td style="font-size: 1rem">{{ photo.camera_name }}</td>
+              <td style="font-size: 1rem">{{ photo.camera_full_name }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+        <p style="text-align: center;font-weight:normal">{{ error_msg }}</p>
+      {% endif %}
+      <br>
+      <h5><form>
+         <button style="display: block; margin: auto; background-color:red; color:white; font-weight:bold" type="submit" formaction="{{url_for('mars_photos')}}">Return to Photos From Mars Page</button>
+      </form></h5>
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com/</p>
+    <p></p>
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+
