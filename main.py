@@ -27,6 +27,7 @@ import os
 import glob
 import operator
 from data import spreadsheet_attributes
+import traceback
 
 # from tkinter import messagebox
 
@@ -262,7 +263,12 @@ with app.app_context():
 def home():
     global db, app
 
-    return render_template("index.html")
+    try:
+        # Go to the home page:
+        return render_template("index.html")
+    except:
+        print(f"Error (route: '/'): {traceback.format_exc()}")
+        update_system_log("route: '/'", traceback.format_exc())
 
 
 # Configure route for "About" web page:
@@ -270,7 +276,12 @@ def home():
 def about():
     global db, app
 
-    return render_template("about.html")
+    try:
+        # Go to the "About" page:
+        return render_template("about.html")
+    except:
+        print(f"Error (route: '/about'): {traceback.format_exc()}")
+        update_system_log("route: '/about'", traceback.format_exc())
 
 
 # Configure route for "Administration" web page:
@@ -289,43 +300,48 @@ def admin_for_website():
 def approaching_asteroids():
     global db, app
 
-    # Instantiate an instance of the "ViewApproachingAsteroidsForm" class:
-    form = ViewApproachingAsteroidsForm()
+    try:
+        # Instantiate an instance of the "ViewApproachingAsteroidsForm" class:
+        form = ViewApproachingAsteroidsForm()
 
-    # Instantiate an instance of the "DisplayApproachingAsteroidsSheetForm" class:
-    form_ss = DisplayApproachingAsteroidsSheetForm()
+        # Instantiate an instance of the "DisplayApproachingAsteroidsSheetForm" class:
+        form_ss = DisplayApproachingAsteroidsSheetForm()
 
-    # Populate the close approach date listbox with an ordered list of close approach dates represented in the database:
-    list_close_approach_dates = []
-    close_approach_dates = db.session.query(distinct(ApproachingAsteroids.close_approach_date)).order_by(ApproachingAsteroids.close_approach_date).all()
-    for close_approach_date in close_approach_dates:
-        list_close_approach_dates.append(str(close_approach_date)[2:12])
-    form.list_close_approach_date.choices = list_close_approach_dates
+        # Populate the close approach date listbox with an ordered list of close approach dates represented in the database:
+        list_close_approach_dates = []
+        close_approach_dates = db.session.query(distinct(ApproachingAsteroids.close_approach_date)).order_by(ApproachingAsteroids.close_approach_date).all()
+        for close_approach_date in close_approach_dates:
+            list_close_approach_dates.append(str(close_approach_date)[2:12])
+        form.list_close_approach_date.choices = list_close_approach_dates
 
-    # Populate the approaching-asteroids sheet file listbox with the sole sheet viewable in this scope:
-    form_ss.list_approaching_asteroids_sheet_name.choices = ["ApproachingAsteroids.xlsx"]
+        # Populate the approaching-asteroids sheet file listbox with the sole sheet viewable in this scope:
+        form_ss.list_approaching_asteroids_sheet_name.choices = ["ApproachingAsteroids.xlsx"]
 
-    # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
-    if form.validate_on_submit():
-        if form.list_close_approach_date.data != None:
-            error_msg = ""
-            # Retrieve the record from the database which pertains to confirmed planets discovered in the selected year:
-            approaching_asteroids_details = retrieve_from_database(trans_type="approaching_asteroids_by_close_approach_date", close_approach_date=form.list_close_approach_date.data)
+        # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
+        if form.validate_on_submit():
+            if form.list_close_approach_date.data != None:
+                error_msg = ""
+                # Retrieve the record from the database which pertains to confirmed planets discovered in the selected year:
+                approaching_asteroids_details = retrieve_from_database(trans_type="approaching_asteroids_by_close_approach_date", close_approach_date=form.list_close_approach_date.data)
 
-            if approaching_asteroids_details == {}:
-                error_msg = "Error: Data could not be obtained at this time."
-            elif approaching_asteroids_details == []:
-                error_msg = "No matching records were retrieved."
+                if approaching_asteroids_details == {}:
+                    error_msg = "Error: Data could not be obtained at this time."
+                elif approaching_asteroids_details == []:
+                    error_msg = "No matching records were retrieved."
 
-            # Show web page with retrieved approaching-asteroid details:
-            return render_template('show_approaching_asteroids_details.html', approaching_asteroids_details=approaching_asteroids_details, close_approach_date=form.list_close_approach_date.data, error_msg=error_msg)
+                # Show web page with retrieved approaching-asteroid details:
+                return render_template('show_approaching_asteroids_details.html', approaching_asteroids_details=approaching_asteroids_details, close_approach_date=form.list_close_approach_date.data, error_msg=error_msg)
 
-        else:
-            # Open the selected spreadsheet file:
-            os.startfile(str(form_ss.list_approaching_asteroids_sheet_name.data))
+            else:
+                # Open the selected spreadsheet file:
+                os.startfile(str(form_ss.list_approaching_asteroids_sheet_name.data))
 
-    # Go to the web page to render the results:
-    return render_template('approaching_asteroids.html', form=form, form_ss=form_ss)
+        # Go to the web page to render the results:
+        return render_template('approaching_asteroids.html', form=form, form_ss=form_ss)
+
+    except:
+        print(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}")
+        update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
 
 
 # Configure route for "Astronomy Pic of the Day" web page:
@@ -333,11 +349,16 @@ def approaching_asteroids():
 def astronomy_pic_of_day():
     global db, app
 
-    # Get details re: the astronomy picture of the day:
-    json, copyright_details, error_msg = get_astronomy_pic_of_the_day()
+    try:
+        # Get details re: the astronomy picture of the day:
+        json, copyright_details, error_msg = get_astronomy_pic_of_the_day()
 
-    # Go to the web page to render the results:
-    return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg)
+        # Go to the web page to render the results:
+        return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg)
+
+    except:
+        print(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}")
+        update_system_log("route: '/astronomy_pic_of_day'", traceback.format_exc())
 
 
 # Configure route for "Confirmed Planets" web page:
@@ -345,42 +366,48 @@ def astronomy_pic_of_day():
 def confirmed_planets():
     global db, app
 
-    # Instantiate an instance of the "ViewConstellationForm" class:
-    form = ViewConfirmedPlanetsForm()
+    try:
+        # Instantiate an instance of the "ViewConstellationForm" class:
+        form = ViewConfirmedPlanetsForm()
 
-    # Instantiate an instance of the "DisplayConfirmedPlanetsSheetForm" class:
-    form_ss = DisplayConfirmedPlanetsSheetForm()
+        # Instantiate an instance of the "DisplayConfirmedPlanetsSheetForm" class:
+        form_ss = DisplayConfirmedPlanetsSheetForm()
 
-    # Populate the discovery year listbox with an ordered (descending) list of discovery years represented in the database:
-    list_discovery_years = []
-    discovery_years = db.session.query(distinct(ConfirmedPlanets.discovery_year)).order_by(ConfirmedPlanets.discovery_year.desc()).all()
-    for year in discovery_years:
-        list_discovery_years.append(int(str(year)[1:5]))
-    form.list_discovery_year.choices = list_discovery_years
+        # Populate the discovery year listbox with an ordered (descending) list of discovery years represented in the database:
+        list_discovery_years = []
+        discovery_years = db.session.query(distinct(ConfirmedPlanets.discovery_year)).order_by(ConfirmedPlanets.discovery_year.desc()).all()
+        for year in discovery_years:
+            list_discovery_years.append(int(str(year)[1:5]))
+        form.list_discovery_year.choices = list_discovery_years
 
-    # Populate the confirmed planets sheet file listbox with the sole sheet viewable in this scope:
-    form_ss.list_confirmed_planets_sheet_name.choices = ["ConfirmedPlanets.xlsx"]
+        # Populate the confirmed planets sheet file listbox with the sole sheet viewable in this scope:
+        form_ss.list_confirmed_planets_sheet_name.choices = ["ConfirmedPlanets.xlsx"]
 
-    # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
-    if form.validate_on_submit():
-        if form.list_discovery_year.data != None:
-            error_msg = ""
-            # Retrieve the record from the database which pertains to confirmed planets discovered in the selected year:
-            confirmed_planets_details = retrieve_from_database(trans_type="confirmed_planets_by_disc_year", disc_year=form.list_discovery_year.data)
+        # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
+        if form.validate_on_submit():
+            if form.list_discovery_year.data != None:
+                error_msg = ""
+                # Retrieve the record from the database which pertains to confirmed planets discovered in the selected year:
+                confirmed_planets_details = retrieve_from_database(trans_type="confirmed_planets_by_disc_year", disc_year=form.list_discovery_year.data)
 
-            if confirmed_planets_details == {}:
-                error_msg = "Error: Data could not be obtained at this time."
-            elif confirmed_planets_details == []:
-                error_msg = "No matching records were retrieved."
+                if confirmed_planets_details == {}:
+                    error_msg = "Error: Data could not be obtained at this time."
+                elif confirmed_planets_details == []:
+                    error_msg = "No matching records were retrieved."
 
-            # Show web page with retrieved confirmed-planet details:
-            return render_template('show_confirmed_planets_details.html', confirmed_planets_details=confirmed_planets_details, disc_year=form.list_discovery_year.data, error_msg=error_msg)
+                # Show web page with retrieved confirmed-planet details:
+                return render_template('show_confirmed_planets_details.html', confirmed_planets_details=confirmed_planets_details, disc_year=form.list_discovery_year.data, error_msg=error_msg)
 
-        else:
-            # Open the selected spreadsheet file:
-            os.startfile(str(form_ss.list_confirmed_planets_sheet_name.data))
+            else:
+                # Open the selected spreadsheet file:
+                os.startfile(str(form_ss.list_confirmed_planets_sheet_name.data))
 
-    return render_template('confirmed_planets.html', form=form, form_ss=form_ss)
+        # Go to the web page to render the results:
+        return render_template('confirmed_planets.html', form=form, form_ss=form_ss)
+
+    except:
+        print(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}")
+        update_system_log("route: '/confirmed_planets'", traceback.format_exc())
 
 
 # Configure route for "Constellations" web page:
@@ -388,36 +415,42 @@ def confirmed_planets():
 def constellations():
     global db, app
 
-    # Instantiate an instance of the "ViewConstellationForm" class:
-    form = ViewConstellationForm()
+    try:
+        # Instantiate an instance of the "ViewConstellationForm" class:
+        form = ViewConstellationForm()
 
-    # Instantiate an instance of the "DisplayConstellationSheetForm" class:
-    form_ss = DisplayConstellationSheetForm()
+        # Instantiate an instance of the "DisplayConstellationSheetForm" class:
+        form_ss = DisplayConstellationSheetForm()
 
-    # Populate the constellation name listbox with an ordered list of constellation names from the database:
-    form.list_constellation_name.choices = db.session.execute(db.select(Constellations.name + " (" + Constellations.nickname + ")").order_by(Constellations.name)).scalars().all()
+        # Populate the constellation name listbox with an ordered list of constellation names from the database:
+        form.list_constellation_name.choices = db.session.execute(db.select(Constellations.name + " (" + Constellations.nickname + ")").order_by(Constellations.name)).scalars().all()
 
-    # Populate the constellation sheet file listbox with the sole sheet viewable in this scope:
-    form_ss.list_constellation_sheet_name.choices = ["Constellations.xlsx"]
+        # Populate the constellation sheet file listbox with the sole sheet viewable in this scope:
+        form_ss.list_constellation_sheet_name.choices = ["Constellations.xlsx"]
 
-    # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
-    if form.validate_on_submit():
+        # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
+        if form.validate_on_submit():
 
-        if form.list_constellation_name.data != None:
-            # Capture selected constellation name:
-            selected_constellation_name = form.list_constellation_name.data.split("(")[0][:len(form.list_constellation_name.data.split("(")[0])-1]
+            if form.list_constellation_name.data != None:
+                # Capture selected constellation name:
+                selected_constellation_name = form.list_constellation_name.data.split("(")[0][:len(form.list_constellation_name.data.split("(")[0])-1]
 
-            # Retrieve the record from the database which pertains to the selected constellation name:
-            constellation_details = db.session.execute(db.select(Constellations).where(Constellations.name == selected_constellation_name)).scalar()
+                # Retrieve the record from the database which pertains to the selected constellation name:
+                constellation_details = db.session.execute(db.select(Constellations).where(Constellations.name == selected_constellation_name)).scalar()
 
-            # Show web page with retrieved constellation details:
-            return render_template('show_constellation_details.html', constellation_details=constellation_details)
+                # Show web page with retrieved constellation details:
+                return render_template('show_constellation_details.html', constellation_details=constellation_details)
 
-        else:
-            # Open the selected spreadsheet file:
-            os.startfile(str(form_ss.list_constellation_sheet_name.data))
+            else:
+                # Open the selected spreadsheet file:
+                os.startfile(str(form_ss.list_constellation_sheet_name.data))
 
-    return render_template('constellations.html', form=form, form_ss=form_ss)
+        # Go to the web page to render the results:
+        return render_template('constellations.html', form=form, form_ss=form_ss)
+
+    except:
+        print(f"Error (route: '/constellations'): {traceback.format_exc()}")
+        update_system_log("route: '/constellations'", traceback.format_exc())
 
 
 # Configure route for "Photos from Mars" web page:
@@ -425,42 +458,48 @@ def constellations():
 def mars_photos():
     global db, app
 
-    # Instantiate an instance of the "ViewConstellationForm" class:
-    form = ViewMarsPhotosForm()
+    try:
+        # Instantiate an instance of the "ViewConstellationForm" class:
+        form = ViewMarsPhotosForm()
 
-    # Instantiate an instance of the "DisplayMarsPhotosSheetForm" class:
-    form_ss = DisplayMarsPhotosSheetForm()
+        # Instantiate an instance of the "DisplayMarsPhotosSheetForm" class:
+        form_ss = DisplayMarsPhotosSheetForm()
 
-    # Populate the rover name / earth date combo listbox with an ordered list of such combinations:
-    list_rover_earth_date_combos = []
-    rover_earth_date_combos = db.session.query(distinct(MarsPhotosAvailable.rover_earth_date_combo)).order_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date.desc()).all()
-    for rover_earth_date_combo in rover_earth_date_combos:
-        list_rover_earth_date_combos.append(str(rover_earth_date_combo).split("'")[1])
-    form.list_rover_earth_date_combo.choices = list_rover_earth_date_combos
+        # Populate the rover name / earth date combo listbox with an ordered list of such combinations:
+        list_rover_earth_date_combos = []
+        rover_earth_date_combos = db.session.query(distinct(MarsPhotosAvailable.rover_earth_date_combo)).order_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date.desc()).all()
+        for rover_earth_date_combo in rover_earth_date_combos:
+            list_rover_earth_date_combos.append(str(rover_earth_date_combo).split("'")[1])
+        form.list_rover_earth_date_combo.choices = list_rover_earth_date_combos
 
-    # Populate the Mars photos sheet file listbox with all filenames of spreadsheets pertinent to this scope:
-    form_ss.list_mars_photos_sheet_name.choices = glob.glob("Mars Photos*.xlsx")
+        # Populate the Mars photos sheet file listbox with all filenames of spreadsheets pertinent to this scope:
+        form_ss.list_mars_photos_sheet_name.choices = glob.glob("Mars Photos*.xlsx")
 
-    # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
-    if form.validate_on_submit():
-        if form.list_rover_earth_date_combo.data != None:
-            error_msg = ""
-            # Retrieve the record from the database which pertains to Mars photos taken via the selected rover / earth date combo:
-            mars_photos_details = retrieve_from_database(trans_type="mars_photos_by_rover_earth_date_combo", rover_earth_date_combo=form.list_rover_earth_date_combo.data)
+        # Validate form entries upon submittal. Depending on the form involved, perform additional processing:
+        if form.validate_on_submit():
+            if form.list_rover_earth_date_combo.data != None:
+                error_msg = ""
+                # Retrieve the record from the database which pertains to Mars photos taken via the selected rover / earth date combo:
+                mars_photos_details = retrieve_from_database(trans_type="mars_photos_by_rover_earth_date_combo", rover_earth_date_combo=form.list_rover_earth_date_combo.data)
 
-            if mars_photos_details == {}:
-                error_msg = "Error: Data could not be obtained at this time."
-            elif mars_photos_details == []:
-                error_msg = "No matching records were retrieved."
+                if mars_photos_details == {}:
+                    error_msg = "Error: Data could not be obtained at this time."
+                elif mars_photos_details == []:
+                    error_msg = "No matching records were retrieved."
 
-            # Show web page with retrieved photo details:
-            return render_template('show_mars_photos_details.html', mars_photos_details=mars_photos_details, rover_earth_date_combo=form.list_rover_earth_date_combo.data, error_msg=error_msg)
+                # Show web page with retrieved photo details:
+                return render_template('show_mars_photos_details.html', mars_photos_details=mars_photos_details, rover_earth_date_combo=form.list_rover_earth_date_combo.data, error_msg=error_msg)
 
-        else:
-            # Open the selected spreadsheet file:
-            os.startfile(str(form_ss.list_mars_photos_sheet_name.data))
+            else:
+                # Open the selected spreadsheet file:
+                os.startfile(str(form_ss.list_mars_photos_sheet_name.data))
 
-    return render_template('mars_photos.html', form=form, form_ss=form_ss)
+        # Go to the web page to render the results:
+        return render_template('mars_photos.html', form=form, form_ss=form_ss)
+
+    except:
+        print(f"Error (route: '/mars_photos'): {traceback.format_exc()}")
+        update_system_log("route: '/mars_photos'", traceback.format_exc())
 
 
 # Configure route for "Space News" web page:
@@ -468,25 +507,30 @@ def mars_photos():
 def space_news():
     global db, app
 
-    # Get results of obtaining and processing the desired information:
-    success, error_msg = get_space_news()
+    try:
+        # Get results of obtaining and processing the desired information:
+        success, error_msg = get_space_news()
 
-    if success:
-        # Query the table for space news articles:
-        with app.app_context():
-            articles = db.session.execute(db.select(SpaceNews).order_by(SpaceNews.row_id)).scalars().all()
-            # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, datetime.strptime(str(SpaceNews.date_time_published), "%d-%b-%Y %H:%M:%S"), datetime.strptime(str(SpaceNews.date_time_updated), "%d-%b-%Y %H:%M:%S"), SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
-            # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, SpaceNews.date_time_published, SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
-            # print(articles)
-            if articles.count == 0:
-                success = False
-                error_msg = "Error: Cannot retrieve article data from database."
+        if success:
+            # Query the table for space news articles:
+            with app.app_context():
+                articles = db.session.execute(db.select(SpaceNews).order_by(SpaceNews.row_id)).scalars().all()
+                # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, datetime.strptime(str(SpaceNews.date_time_published), "%d-%b-%Y %H:%M:%S"), datetime.strptime(str(SpaceNews.date_time_updated), "%d-%b-%Y %H:%M:%S"), SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
+                # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, SpaceNews.date_time_published, SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
+                # print(articles)
+                if articles.count == 0:
+                    success = False
+                    error_msg = "Error: Cannot retrieve article data from database."
 
-    else:
-        articles = None
+        else:
+            articles = None
 
-    # Go to the web page to render the results:
-    return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg)
+        # Go to the web page to render the results:
+        return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg)
+
+    except:
+        print(f"Error (route: '/space_news'): {traceback.format_exc()}")
+        update_system_log("route: '/space_news'", traceback.format_exc())
 
 
 # Configure route for "Where is ISS" web page:
@@ -494,11 +538,16 @@ def space_news():
 def where_is_iss():
     global db, app
 
-    # Get ISS's current location along with a URL to get a map plotting said location:
-    location_address, location_url = get_iss_location()
+    try:
+        # Get ISS's current location along with a URL to get a map plotting said location:
+        location_address, location_url = get_iss_location()
 
-    # Go to the web page to render the results:
-    return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""))
+        # Go to the web page to render the results:
+        return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""))
+
+    except:
+        print(f"Error (route: '/where_is_iss'): {traceback.format_exc()}")
+        update_system_log("route: '/where_is_iss'", traceback.format_exc())
 
 
 # Configure route for "Who is in Space Now" web page:
@@ -506,11 +555,16 @@ def where_is_iss():
 def who_is_in_space_now():
     global db, app
 
-    # Get results of obtaining a JSON with the desired information:
-    json, has_json = get_people_in_space_now()
+    try:
+        # Get results of obtaining a JSON with the desired information:
+        json, has_json = get_people_in_space_now()
 
-    # Go to the web page to render the results:
-    return render_template("who_is_in_space_now.html", json=json, has_json=has_json)
+        # Go to the web page to render the results:
+        return render_template("who_is_in_space_now.html", json=json, has_json=has_json)
+
+    except:
+        print(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}")
+        update_system_log("route: '/who_is_in_space_now'", traceback.format_exc())
 
 
 # DEFINE FUNCTIONS TO BE USED FOR THIS APPLICATION (LISTED IN ALPHABETICAL ORDER BY FUNCTION NAME):
@@ -1134,13 +1188,15 @@ def get_astronomy_pic_of_the_day():
             # print("Error (Astronomy pic): API request failed. Data cannot be obtained at this time.")
             error_message = "API request failed. Data cannot be obtained at this time."
 
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        # print(f"Error (Astronomy pic of the day): {err}")
+    except:  # An error has occurred.
+        print(f"Error (get_astronomy_pic_of_the_day): {traceback.format_exc()}")
+        update_system_log("get_astronomy_pic_of_the_day", traceback.format_exc())
         error_message = "An error has occurred. Data cannot be obtained at this time."
 
-    # Return results to calling function:
-    return json, copyright_details, error_message
+    finally:
+        # Return results to calling function:
+        return json, copyright_details, error_message
+
 
 
 def get_iss_location():
@@ -1188,12 +1244,15 @@ def get_iss_location():
             location_address = "API request failed. Data cannot be obtained at this time."
             location_url = ""
 
-    except Exception as err:  # An error has occurred.
+    except:  # An error has occurred.
+        print(f"Error (get_iss_location): {traceback.format_exc()}")
+        update_system_log("get_iss_location", traceback.format_exc())
         location_address = "An error has occurred. Data cannot be obtained at this time."
         location_url = ""
 
-    # Return location address and URL to the calling function:
-    return location_address, location_url
+    finally:
+        # Return location address and URL to the calling function:
+        return location_address, location_url
 
 
 def get_people_in_space_now():
@@ -1806,13 +1865,30 @@ def get_space_news():
             error_message = "API request failed. Space news articles cannot be obtained at this time."
             success = False
 
-    except Exception as err:  # An error has occurred.
+    except:  # An error has occurred.
+        print(f"Error (get_space_news): {traceback.format_exc()}")
+        update_system_log("get_space_news", traceback.format_exc())
         error_message = "An error has occurred. Space news articles cannot be obtained at this time."
         success = False
 
-    # Return resulta to the calling function:
-    return success, error_message
+    finally:
+        # Return results to the calling function:
+        return success, error_message
 
+
+def update_system_log(activity, exception):
+    # Capture current date/time:
+    current_date_time = datetime.now()
+    current_date_time_file = current_date_time.strftime("%Y-%m-%d")
+
+    with open("log_eye_for_space_" + current_date_time_file + ".txt", "a") as f:
+        f.write(datetime.now().strftime("%Y-%m-%d @ %I:%M %p") + ":\n")
+        if exception == None:
+            f.write(activity + ": Successfully executed." + "\n")
+        else:
+            f.write(activity + ": Execution Failed:" + "\n" + exception)
+
+    f.close()
 
 def update_database(trans_type, item_to_process, **kwargs):
     """Function to update this application's database based on the type of transaction"""
@@ -2101,20 +2177,26 @@ def retrieve_from_database(trans_type, **kwargs):
 
 def run_apis():
     global mars_rovers
+    try:
+        # Retrieve, from the database, a list of all rovers that are currently active for purposes of
+        # data production.  If the function called returns an empty list, end this procedure:
+        mars_rovers = retrieve_from_database("mars_rovers")
+        if mars_rovers == {}:
+            exit()
 
-    # Retrieve, from the database, a list of all rovers that are currently active for purposes of
-    # data production.  If the function called returns an empty list, end this procedure:
-    mars_rovers = retrieve_from_database("mars_rovers")
-    if mars_rovers == {}:
-        exit()
+        # get_mars_photos()
+        # get_constellation_data()
+        # get_confirmed_planets()
+        # get_approaching_asteroids()
 
-    # get_mars_photos()
-    # get_constellation_data()
-    # get_confirmed_planets()
-    # get_approaching_asteroids()
+        update_system_log("run_apis", None)
 
+    except:
+        print(f"Error: {traceback.format_exc()}")
+        update_system_log("run_apis", traceback.format_exc())
 
 # run_apis()
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5003)
