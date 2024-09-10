@@ -1,0 +1,55 @@
+{% include "header.html" %}
+{% from 'bootstrap5/form.html' import render_form %} <!-- INTRODUCES BOOTSTRAP-FLASK TO THE MIX -->
+
+<!-- Page Header-->
+<header
+  class="masthead"
+  style="background-image: url('../static/assets/img/admin_update.png')">
+
+  <div class="container position-relative px-4 px-lg-5">
+    <div class="row gx-4 gx-lg-5 justify-content-center">
+      <div class="col-md-10 col-lg-8 col-xl-7">
+        <div class="site-heading">
+          <h1>Eye for Space</h1>
+          <span class="subheading">Administrative Update</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="col-lg-8 mx-auto p-4 py-md-5">
+  <main>
+    {% if update_status != "<<Update Choices to be Made.>>" %}
+      <h5 style="font-weight:normal;text-align:center">{{ update_status }}</h5>
+    {% endif %}
+    {% if form %}
+      <h5 style="text-align: center;font-weight:bold" >Please select which items below you wish to update:</h5>
+      <table style="width: 100%; margin-left:auto; margin-right:auto">
+        <colgroup>
+          <col span="1" style="width: 37%;">
+          <col span="1" style="width: 31%;">
+          <col span="1" style="width: 37%;">
+        </colgroup>
+        <tr>
+          <th style="font-size: 1.25rem"></th>
+          <th style="font-size: 1.25rem"></th>
+          <th style="font-size: 1.25rem"></th>
+        </tr>
+        <tr>
+          <td></td>
+          <td style="font-size: 1.25rem">{{ render_form(form) }}</td>
+          <td></td>
+        </tr>
+      </table>
+    {% endif %}
+  </main>
+  <footer class="pt-5 my-5 text-body-secondary border-top">
+    <p>Website template created by the Bootstrap team · © 2024</p>
+  </footer>
+</div>
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</body>
+</html>
+
+

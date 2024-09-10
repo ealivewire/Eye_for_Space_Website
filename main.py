@@ -10,8 +10,8 @@ from flask import Flask, render_template, redirect, url_for, request
 from flask_bootstrap import Bootstrap5
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField, SubmitField
-from wtforms.validators import DataRequired, Length
+from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField
+from wtforms.validators import InputRequired, Length, Email
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Boolean, Float, DateTime, func, distinct
 from selenium import webdriver
@@ -25,9 +25,10 @@ import math
 from dotenv import load_dotenv
 import os
 import glob
-import operator
-from data import spreadsheet_attributes
+from data import spreadsheet_attributes, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CONFIRMED_PLANETS, URL_SPACE_NEWS, URL_PEOPLE_IN_SPACE_NOW, URL_ISS_LOCATION, URL_CONSTELLATION_MAP_SITE, URL_CONSTELLATION_ADD_DETAILS_1, URL_CONSTELLATION_ADD_DETAILS_2A, URL_CONSTELLATION_ADD_DETAILS_2B, URL_MARS_ROVER_PHOTOS_BY_ROVER, URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA, URL_ASTRONOMY_PIC_OF_THE_DAY, URL_GET_LOC_FROM_LAT_AND_LON, API_KEY_CLOSEST_APPROACH_ASTEROIDS, API_KEY_GET_LOC_FROM_LAT_AND_LON, API_KEY_MARS_ROVER_PHOTOS, API_KEY_ASTRONOMY_PIC_OF_THE_DAY, SENDER_EMAIL_GMAIL, SENDER_PASSWORD_GMAIL, SENDER_PORT, SENDER_HOST
 import traceback
+import email_validator
+import smtplib
 
 # from tkinter import messagebox
 
@@ -44,48 +45,8 @@ load_dotenv()
 # - For Space News: "Data courtesy of Spaceflight News API (SNAPI), a product by The Space Devs (TSD)"
 # - For Closest Approach Asteroids: "Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/); API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach"
 
-# Define a constant for the URL to use in API requests for identifying people in space
-# now and the spacecraft these people are on:
-URL_PEOPLE_IN_SPACE_NOW = "http://api.open-notify.org/astros.json" # Free account; No limits
-
-# Define a constant for the URL to use in API requests for identifying the current
-# location of the International Space Station (ISS)":"
-URL_ISS_LOCATION = "http://api.open-notify.org/iss-now" # Free account; No limits
-
-# Define constants for the URL and API key to use in reverse-encoding the ISS latitude & longitude,
-# with the purpose of yielding a human-readable address (if there is one, for the ISS can be over
-# water at a particular time):
-URL_GET_LOC_FROM_LAT_AND_LON = "https://geocode.maps.co/reverse"
-API_KEY_GET_LOC_FROM_LAT_AND_LON = os.getenv("API_KEY_GET_LOC_FROM_LAT_AND_LON")  # Limit on free acct: 1 request/second (5,000/day)
-
-# Define constants for the URLs and API key to use in obtaining access to summary and details re: Mars photos:
-URL_MARS_ROVER_PHOTOS_BY_ROVER = "https://mars-photos.herokuapp.com/api/v1//manifests/"
-URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA = "https://mars-photos.herokuapp.com/api/v1/rovers/"
-API_KEY_MARS_ROVER_PHOTOS = os.getenv("API_KEY_MARS_ROVER_PHOTOS")  # Web Service Default Hourly Limit: 1,000 requests per hour; API Key Limits = 30 requests/IP address/hour and 50 requests/IP address/day
-
-# Define constants for the URL and API to use in obtaining data on asteroids based on closest approach to Earth:
-URL_CLOSEST_APPROACH_ASTEROIDS = "https://api.nasa.gov/neo/rest/v1/feed?"
-API_KEY_CLOSEST_APPROACH_ASTEROIDS = os.getenv("API_KEY_CLOSEST_APPROACH_ASTEROIDS")
-
-# Define constants for the URL and API key to use in API requests to yield the astronomy picture of the day:
-URL_ASTRONOMY_PIC_OF_THE_DAY = "https://api.nasa.gov/planetary/apod"
-API_KEY_ASTRONOMY_PIC_OF_THE_DAY = os.getenv("API_KEY_ASTRONOMY_PIC_OF_THE_DAY")
-
-# Define constant for the URL to use in API requests to yield a listing of confirmed planets:
-URL_CONFIRMED_PLANETS = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+distinct+hostname+,+sy_snum+,+sy_pnum+,+pl_name+,+disc_year+,+discoverymethod+,+disc_facility+,+disc_telescope+from+ps+where+soltype+=+'Published Confirmed'+order+by+hostname+,+pl_name+&format=json"
-
-# Define constants for URLs pertaining to the websites which offer maps and other details for constellations:
-URL_CONSTELLATION_MAP_SITE = "https://www.go-astronomy.com/constellations.htm"
-URL_CONSTELLATION_ADD_DETAILS_1 = "https://in-the-sky.org/data/constellations_list.php"
-URL_CONSTELLATION_ADD_DETAILS_2A = "https://in-the-sky.org/search.php?searchtype=Constellations&s=&startday=21&startmonth=7&startyear=2024&endday=30&endmonth=12&endyear=2034&ordernews=ASC&satorder=0&maxdiff=7&feed=DFAN&objorder=1&distunit=0&magmin=&magmax=&obj1Type=0&news_view=normal&distmin=&distmax=&satowner=0&satgroup=0&satdest=0&satsite=0&lyearmin=1957&lyearmax=2024&page=1"
-URL_CONSTELLATION_ADD_DETAILS_2B = 'https://in-the-sky.org/search.php?searchtype=Constellations&s=&startday=21&startmonth=7&startyear=2024&endday=30&endmonth=12&endyear=2034&ordernews=ASC&satorder=0&maxdiff=7&feed=DFAN&objorder=1&distunit=0&magmin=&magmax=&obj1Type=0&news_view=normal&distmin=&distmax=&satowner=0&satgroup=0&satdest=0&satsite=0&lyearmin=1957&lyearmax=2024&page=2'
-
-# Define constant for URL pertaining to space news:
-URL_SPACE_NEWS = "https://api.spaceflightnewsapi.net/v4/articles"
-
 # Define constant for web page loading-time allowance (in seconds) for the web-scrapers:
 WEB_LOADING_TIME_ALLOWANCE = 5
-
 
 # Initialize the Flask app. object
 app = Flask(__name__)
@@ -204,6 +165,24 @@ class SpaceNews(db.Model):
 
 
 # CONFIGURE FORMS FOR USE IN HTML FILES (LISTED IN ALPHABETICAL ORDER):
+# *********************************************************************
+# Configure "admin_update" form:
+class AdminUpdateForm(FlaskForm):
+    chk_approaching_asteroids = BooleanField(label="Approaching Asteroids", default=True)
+    chk_confirmed_planets = BooleanField(label="Confirmed Planets", default=True)
+    chk_constellations = BooleanField(label="Constellations", default=True)
+    chk_mars_photos = BooleanField(label="Photos from Mars", default=True)
+    button_submit = SubmitField(label="Begin Update")
+
+
+# Configure 'contact us' form:
+class ContactForm(FlaskForm):
+    txt_name = StringField(label="Your Name:", validators=[InputRequired(), Length(max=50)])
+    txt_email = EmailField(label="Your E-mail Address:", validators=[InputRequired(), Email()])
+    txt_message = TextAreaField(label="Your Message:", validators=[InputRequired()])
+    button_submit = SubmitField(label="Send Message")
+
+
 # Configure form for viewing "approaching asteroids" spreadsheet:
 class DisplayApproachingAsteroidsSheetForm(FlaskForm):
     list_approaching_asteroids_sheet_name = SelectField("Approaching Asteroids Sheet:", choices=[], validate_choice=False)
@@ -258,6 +237,7 @@ with app.app_context():
 
 
 # CONFIGURE ROUTES FOR WEB PAGES (LISTED IN HIERARCHICAL ORDER STARTING WITH HOME PAGE, THEN ALPHABETICALLY):
+# ***********************************************************************************************************
 # Configure route for home page:
 @app.route('/')
 def home():
@@ -284,15 +264,39 @@ def about():
         update_system_log("route: '/about'", traceback.format_exc())
 
 
-# Configure route for "Administration" web page:
-@app.route('/admin_for_website')
-def admin_for_website():
+# Configure route for "Administrative Update" web page:
+@app.route('/admin_update',methods=["GET", "POST"])
+def admin_update():
     global db, app
 
-    run_apis()
+    try:
+        # Instantiate an instance of the "AdminUpdateForm" class:
+        form = AdminUpdateForm()
 
-    # Go to the admin web page:
-    return render_template("about.html")
+        # Validate form entries upon submittal. Depending on the choices made via the form, perform additional processing:
+        if form.validate_on_submit():
+            # Execute selected updates:
+            # ***From functions, get result of function execution and update web page***
+            if form.chk_approaching_asteroids.data:
+                pass
+            if form.chk_confirmed_planets.data:
+                pass
+            if form.chk_constellations.data:
+                pass
+            if form.chk_mars_photos.data:
+                pass
+
+            update_status = "Pretend all went well."
+
+            # Go to the "Administrative Update" page and display the results of update execution:
+            return render_template("admin_update.html", update_status=update_status)
+
+        # Go to the "Contact Us" page:
+        return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>")
+
+    except:  # An error has occurred.
+        print(f"Error (route: '/contact'): {traceback.format_exc()}")
+        update_system_log("route: '/contact'", traceback.format_exc())
 
 
 # Configure route for "Approaching Asteroids" web page:
@@ -339,7 +343,7 @@ def approaching_asteroids():
         # Go to the web page to render the results:
         return render_template('approaching_asteroids.html', form=form, form_ss=form_ss)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}")
         update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
 
@@ -356,7 +360,7 @@ def astronomy_pic_of_day():
         # Go to the web page to render the results:
         return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}")
         update_system_log("route: '/astronomy_pic_of_day'", traceback.format_exc())
 
@@ -405,7 +409,7 @@ def confirmed_planets():
         # Go to the web page to render the results:
         return render_template('confirmed_planets.html', form=form, form_ss=form_ss)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}")
         update_system_log("route: '/confirmed_planets'", traceback.format_exc())
 
@@ -448,9 +452,34 @@ def constellations():
         # Go to the web page to render the results:
         return render_template('constellations.html', form=form, form_ss=form_ss)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/constellations'): {traceback.format_exc()}")
         update_system_log("route: '/constellations'", traceback.format_exc())
+
+
+# Configure route for "Contact Us" web page:
+@app.route('/contact',methods=["GET", "POST"])
+def contact():
+    global db, app
+
+    try:
+        # Instantiate an instance of the "ContactForm" class:
+        form = ContactForm()
+
+        # Validate form entries upon submittal. If validated, send message:
+        if form.validate_on_submit():
+            # Send message via e-mail:
+            msg_status = email_from_contact_page(form)
+
+            # Go to the "Contact Us" page and display the results of e-mail execution attempt:
+            return render_template("contact.html", msg_status=msg_status)
+
+        # Go to the "Contact Us" page:
+        return render_template("contact.html", form=form, msg_status="<<Message Being Drafted.>>")
+
+    except:  # An error has occurred.
+        print(f"Error (route: '/contact'): {traceback.format_exc()}")
+        update_system_log("route: '/contact'", traceback.format_exc())
 
 
 # Configure route for "Photos from Mars" web page:
@@ -497,7 +526,7 @@ def mars_photos():
         # Go to the web page to render the results:
         return render_template('mars_photos.html', form=form, form_ss=form_ss)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/mars_photos'): {traceback.format_exc()}")
         update_system_log("route: '/mars_photos'", traceback.format_exc())
 
@@ -515,9 +544,6 @@ def space_news():
             # Query the table for space news articles:
             with app.app_context():
                 articles = db.session.execute(db.select(SpaceNews).order_by(SpaceNews.row_id)).scalars().all()
-                # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, datetime.strptime(str(SpaceNews.date_time_published), "%d-%b-%Y %H:%M:%S"), datetime.strptime(str(SpaceNews.date_time_updated), "%d-%b-%Y %H:%M:%S"), SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
-                # articles = db.session.execute(db.select(SpaceNews.row_id, SpaceNews.title, SpaceNews.news_site, SpaceNews.summary, SpaceNews.date_time_published, SpaceNews.date_time_updated, SpaceNews.url).order_by(SpaceNews.row_id)).scalars().all()
-                # print(articles)
                 if articles.count == 0:
                     success = False
                     error_msg = "Error: Cannot retrieve article data from database."
@@ -528,7 +554,7 @@ def space_news():
         # Go to the web page to render the results:
         return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/space_news'): {traceback.format_exc()}")
         update_system_log("route: '/space_news'", traceback.format_exc())
 
@@ -545,7 +571,7 @@ def where_is_iss():
         # Go to the web page to render the results:
         return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""))
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/where_is_iss'): {traceback.format_exc()}")
         update_system_log("route: '/where_is_iss'", traceback.format_exc())
 
@@ -562,38 +588,602 @@ def who_is_in_space_now():
         # Go to the web page to render the results:
         return render_template("who_is_in_space_now.html", json=json, has_json=has_json)
 
-    except:
+    except:  # An error has occurred.
         print(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}")
         update_system_log("route: '/who_is_in_space_now'", traceback.format_exc())
 
 
 # DEFINE FUNCTIONS TO BE USED FOR THIS APPLICATION (LISTED IN ALPHABETICAL ORDER BY FUNCTION NAME):
+# *************************************************************************************************
 def close_workbook(workbook):
     """Function to close a spreadsheet workbook, checking if the file is open"""
-    while True:
-        try:
-            workbook.close()
+    try:
+        while True:
+            try:
+                # Close the workbook.
+                workbook.close()
 
-        except xlsxwriter.exceptions.FileCreateError as e:
-            user_answer = input("Exception caught in workbook.close(): %s\n"
-                                "Please close the file if it is open in Excel.\n"
-                                "Try to write file again? (y/n|): " % e
-                                )
-            if user_answer.lower() != "n":
-                continue
-        break
+            except xlsxwriter.exceptions.FileCreateError as e:
+                # Inform user that exception has occurred and prompt for confirmation
+                # to re-attempt closure of workbook:
+                user_answer = input("Exception caught in workbook.close(): %s\n"
+                                    "Please close the file if it is open in Excel.\n"
+                                    "Try to write file again? (y/n|): " % e
+                                    )
+                if user_answer.lower() != "n":  # User has elected to not re-attempt closure.
+                    continue
+            break
+
+    except:  # An error has occurred.
+        print(f"Error (close_workbook): {traceback.format_exc()}")
+        update_system_log("close_workbook", traceback.format_exc())
 
 
 def create_workbook(workbook_name):
     """Function for creating and returning a spreadsheet workbook for subsequent population/formatting"""
-    # Create and return the workbook:
-    return xlsxwriter.Workbook(workbook_name)
+    try:
+        # Create and return the workbook:
+        return xlsxwriter.Workbook(workbook_name)
+
+    except:  # An error has occurred.
+        print(f"Error (create_workbook): {traceback.format_exc()}")
+        update_system_log("create_workbook", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return None
 
 
 def create_worksheet(workbook, worksheet_name):
     """Function for creating and returning a spreadsheet worksheet for subsequent population/formatting"""
-    # Create and return the worksheet:
-    return workbook.add_worksheet(worksheet_name)
+    try:
+        # Create and return the worksheet:
+        return workbook.add_worksheet(worksheet_name)
+
+    except:  # An error has occurred.
+        print(f"Error (create_worksheet): {traceback.format_exc()}")
+        update_system_log("create_worksheet", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return None
+
+
+def email_from_contact_page(form):
+    """Function to process a message that user wishes to e-mail from this website to the website administrator."""
+    try:
+        # E-mail the message using the contents of the "Contact Us" web page form as input:
+        with smtplib.SMTP(SENDER_HOST, port=SENDER_PORT) as connection:
+            try:
+                # Make connection secure, including encrypting e-mail.
+                connection.starttls()
+            except:
+                # Return failed-execution message to the calling function:
+                return "Error: Could not make connection to send e-mails. Your message was not sent."
+            try:
+                # Login to sender's e-mail server.
+                connection.login(SENDER_EMAIL_GMAIL, SENDER_PASSWORD_GMAIL)
+            except:
+                # Return failed-execution message to the calling function:
+                return "Error: Could not log into e-mail server to send e-mails. Your message was not sent."
+            else:
+                # Send e-mail.
+                connection.sendmail(
+                    from_addr=SENDER_EMAIL_GMAIL,
+                    to_addrs=SENDER_EMAIL_GMAIL,
+                    msg=f"Subject: Eye for Space - E-mail from 'Contact Us' page\n\nName: {form.txt_name.data}\nE-mail address: {form.txt_email.data}\n\nMessage:\n{form.txt_message.data}"
+                )
+                # Return successful-execution message to the calling function::
+                return "Your message has been successfully sent."
+
+    except:  # An error has occurred.
+        update_system_log("email_from_contact_page", traceback.format_exc())
+
+        # Return failed-execution message to the calling function:
+        return "An error has occurred. Your message was not sent."
+
+
+def get_approaching_asteroids():
+    """Function that retrieves and processes a list of asteroids based on closest approach to Earth"""
+    # Capture the current date:
+    current_date = datetime.now()
+
+    # Capture the current date + an added window (delta) of the following 7 days:
+    current_date_with_delta = current_date + timedelta(days=7)
+
+    try:
+        # Execute the API request (limit: closest approach <= 7 days from today):
+        response = requests.get(URL_CLOSEST_APPROACH_ASTEROIDS + "?start_date=" + current_date.strftime("%Y-%m-%d") + "&end_date=" + current_date_with_delta.strftime("%Y-%m-%d") + "&api_key=" + API_KEY_CLOSEST_APPROACH_ASTEROIDS)
+
+        # Initialize variable to store collected necessary asteroid data:
+        approaching_asteroids = []
+
+        # If the API request was successful, display the results:
+        if response.status_code == 200:  # API request was successful.
+
+            # Capture desired fields from the returned JSON:
+            for key in response.json()["near_earth_objects"]:
+                for asteroid in response.json()["near_earth_objects"][key]:
+                    asteroid_dict = {
+                        "id": asteroid["id"],
+                        "name": asteroid["name"],
+                        "absolute_magnitude_h": asteroid["absolute_magnitude_h"],
+                        "estimated_diameter_km_min": asteroid["estimated_diameter"]["kilometers"]["estimated_diameter_min"],
+                        "estimated_diameter_km_max": asteroid["estimated_diameter"]["kilometers"]["estimated_diameter_max"],
+                        "is_potentially_hazardous": asteroid["is_potentially_hazardous_asteroid"],
+                        "close_approach_date": asteroid["close_approach_data"][0]["close_approach_date"],
+                        "relative_velocity_km_per_s": asteroid["close_approach_data"][0]["relative_velocity"]["kilometers_per_second"],
+                        "miss_distance_km": asteroid["close_approach_data"][0]["miss_distance"]["kilometers"],
+                        "orbiting_body": asteroid["close_approach_data"][0]["orbiting_body"],
+                        "is_sentry_object": asteroid["is_sentry_object"],
+                        "url": asteroid["nasa_jpl_url"]
+                        }
+
+                    # Add captured data for each asteroid (as a dictionary) to the "approaching_asteroids" list:
+                    approaching_asteroids.append(asteroid_dict)
+
+            # Delete the existing records in the "approaching_asteroids" database table and update same with
+            # the up-to-date data (from the JSON).  If an error occurred, return a failed-execution indication
+            # to the calling function:
+            if not update_database("update_approaching_asteroids", approaching_asteroids):
+                return "Error: Database could not be updated. Data cannot be obtained at this time.", False
+
+            # Retrieve all existing records in the "approaching_asteroids" database table. If the function
+            # called returns an empty directory, return a failed-execution indication to the calling function:
+            asteroids_data = retrieve_from_database("approaching_asteroids")
+            if asteroids_data == {}:
+                return "Error: Data cannot be obtained at this time.", False
+
+            # If an empty list was returned, no records satisfied the query.  Therefore, return a failed-
+            # execution indication to the calling function:
+            elif asteroids_data == []:
+                return "No matching records were retrieved.", False
+
+            # Create and format a spreadsheet file (workbook) to contain all asteroids data. If an error
+            # occurred, return failed-execution indication to the calling function:
+            if not export_data_to_spreadsheet_standard("approaching_asteroids", asteroids_data):
+                return "Error: Spreadsheet creation could not be completed at this time.", False
+
+            # At this point, function is deemed to have executed successfully.  Return the populated
+            # "asteroids" list along with a successful-execution indication to the calling function:
+            return asteroids_data, True
+
+        else:  # API request failed.
+            return "Error: API request failed. Data cannot be obtained at this time.", False
+
+    except:  # An error has occurred.
+        update_system_log("get_approaching_asteroids", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return "An error has occurred. Data cannot be obtained at this time.", False
+
+
+def get_astronomy_pic_of_the_day():
+    """Function to retrieve the astronomy picture of the day"""
+    # Initialize variables to be used for returning values to the calling function:
+    json = {}
+    copyright_details = ""
+    error_message = ""
+
+    try:
+        # Execute API request:
+        url = URL_ASTRONOMY_PIC_OF_THE_DAY + "?api_key=" + API_KEY_ASTRONOMY_PIC_OF_THE_DAY
+        response = requests.get(url)
+
+        # If the API request was successful, capture the results:
+        if response.status_code == 200:  # API request was successful.
+            json = response.json()
+
+            # If there is copyright info. included in the JSON, capture it:
+            try:
+                copyright_details = f"Copyright: {response.json()["copyright"].replace("\n", "")}"
+            except:
+                pass
+
+        else:  # API request failed.
+            error_message = "API request failed. Data cannot be obtained at this time."
+
+    except:  # An error has occurred.
+        update_system_log("get_astronomy_pic_of_the_day", traceback.format_exc())
+        error_message = "An error has occurred. Data cannot be obtained at this time."
+
+    finally:
+        # Return results to calling function:
+        return json, copyright_details, error_message
+
+
+def get_iss_location():
+    """Function to retrieve the current location of the ISS and a link to view the map of same"""
+    # Initialize variables to be used for returning values to the calling function:
+    location_address = ""
+    location_url = ""
+
+    try:
+        # Execute API request:
+        response = requests.get(URL_ISS_LOCATION)
+
+        # If the API request was successful, capture and process the results:
+        if response.status_code == 200:
+            latitude = response.json()["iss_position"]["latitude"]
+            longitude = response.json()["iss_position"]["longitude"]
+
+            # Execute API request (using the retrieved latitude and longitude), to
+            # get a link to a map of the ISS's current location:
+            url = URL_GET_LOC_FROM_LAT_AND_LON + "?lat=" + str(latitude) + "&lon=" + str(
+                longitude) + "&api_key=" + API_KEY_GET_LOC_FROM_LAT_AND_LON
+            response = requests.get(url)
+
+            # If the API request was successful, capture and process the results:
+            if response.status_code == 200:  # API request was successful.
+                for key in response.json():
+                    if key == "error":  # Resulting JSON has an error key (possibly due to current location being over water).
+                        if response.json()["error"] == "Unable to geocode":  # ISS may currently be over water.
+                            location_address = "No terrestrial address is available.  ISS could be over water at the current time."
+
+                    else:  # Terrestrial address is available.
+                        # Display terrestrial address:
+                        location_address = response.json()["display_name"]
+
+                    # Break from the 'for' loop:
+                    break
+
+                # Prepare and display a link that points to the ISS's current location:
+                location_url = "https://maps.google.com/?q=" + str(latitude) + "," + str(longitude)
+
+        else:  # API request failed.
+            location_address = "API request failed. Data cannot be obtained at this time."
+            location_url = ""
+
+    except:  # An error has occurred.
+        update_system_log("get_iss_location", traceback.format_exc())
+        location_address = "An error has occurred. Data cannot be obtained at this time."
+        location_url = ""
+
+    finally:
+        # Return location address and URL to the calling function:
+        return location_address, location_url
+
+
+def get_people_in_space_now():
+    """Function that retrieves a list of people currently in space at the present moment"""
+    try:
+        # Execute the API request:
+        response = requests.get(URL_PEOPLE_IN_SPACE_NOW)
+
+        # If the API request was successful, display the results:
+        if response.status_code == 200:  # API request was successful.
+            # Sort the resulting JSON by person's name:
+            people_in_space_now = collections.OrderedDict(response.json().items())
+
+            # Return the sorted JSON to the calling function:
+            return people_in_space_now["people"], True
+
+        else:  # API request failed.
+            return "Error: API request failed. Data cannot be obtained at this time.", False
+
+    except:  # An error has occurred.
+        print(f"Error (get_people_in_space_now): {traceback.format_exc()}")
+        update_system_log("get_people_in_space_now", traceback.format_exc())
+        return "An error has occurred. Data cannot be obtained at this time.", False
+
+
+def get_space_news():
+    """Function for retrieving the latest space news articles.rm"""
+    # Initialize variables to return to calling function:
+    success = True
+    error_message = ""
+
+    try:
+        # Execute API request:
+        response = requests.get(URL_SPACE_NEWS)
+        if response.status_code == 200:
+            # Delete the existing records in the "space_news" database table and update same with
+            # the newly acquired articles (from the JSON):
+            if not update_database("update_space_news", response.json()['results']):
+                error_message = "Error: Space news articles cannot be obtained at this time."
+                success = False
+
+        else:
+            error_message = "API request failed. Space news articles cannot be obtained at this time."
+            success = False
+
+    except:  # An error has occurred.
+        update_system_log("get_space_news", traceback.format_exc())
+        error_message = "An error has occurred. Space news articles cannot be obtained at this time."
+        success = False
+
+    finally:
+        # Return results to the calling function:
+        return success, error_message
+
+
+def retrieve_from_database(trans_type, **kwargs):
+    """Function to update this application's database based on the type of transaction"""
+    try:
+        with app.app_context():
+            if trans_type == "approaching_asteroids":
+                # Retrieve and return all existing records, sorted by close-approach date, from the "approaching_asteroids" database table:
+                return db.session.execute(db.select(ApproachingAsteroids).order_by(ApproachingAsteroids.close_approach_date, ApproachingAsteroids.name)).scalars().all()
+
+            elif trans_type == "approaching_asteroids_by_close_approach_date":
+                # Capture optional argument:
+                close_approach_date = kwargs.get("close_approach_date", None)
+
+                # Retrieve and return all existing records, sorted by asteroid's name, from the "approaching_asteroids" database table where the "close_approach_date" field matches the passed parameter:
+                return db.session.execute(db.select(ApproachingAsteroids).where(ApproachingAsteroids.close_approach_date == close_approach_date).order_by(ApproachingAsteroids.name)).scalars().all()
+
+            elif trans_type == "confirmed_planets":
+                # Retrieve and return all existing records, sorted by host and planet names. from the "confirmed_planets" database table:
+                return db.session.execute(db.select(ConfirmedPlanets).order_by(ConfirmedPlanets.host_name, ConfirmedPlanets.planet_name)).scalars().all()
+
+            elif trans_type == "confirmed_planets_by_disc_year":
+                # Capture optional argument:
+                disc_year = kwargs.get("disc_year", None)
+
+                # Retrieve and return all existing records, sorted by host and planet names, from the "confirmed_planets" database table where the "discovery_year" field matches the passed parameter:
+                return db.session.execute(db.select(ConfirmedPlanets).where(ConfirmedPlanets.discovery_year == disc_year).order_by(ConfirmedPlanets.host_name, ConfirmedPlanets.planet_name)).scalars().all()
+
+            elif trans_type == "constellations":
+                # Initialize return variable (dictionary):
+                item_to_return = {}
+
+                # Retrieve all existing records from the "constellations" database table:
+                constellations_list = db.session.execute(db.select(Constellations)).scalars().all()
+
+                # Populate the "item_to_return" dictionary will all retrieved records from the DB:
+                for i in range(0, len(constellations_list)):
+                    item_to_return.update({
+                        constellations_list[i].name: {
+                            "abbreviation": constellations_list[i].abbreviation,
+                            "nickname": constellations_list[i].nickname,
+                            "url": constellations_list[i].url,
+                            "area": constellations_list[i].area,
+                            "myth_assoc": constellations_list[i].myth_assoc,
+                            "first_appear": constellations_list[i].first_appear,
+                            "brightest_star_name": constellations_list[i].brightest_star_name,
+                            "brightest_star_url": constellations_list[i].brightest_star_url
+                        }
+                    })
+
+                # Return the "item to return" dictionary to the calling function:
+                return item_to_return
+
+            elif trans_type == "mars_photo_details_compare_with_photos_available":
+                # Retrieve all existing records, sorted by rover name/earth date combo and sol, from the "mars_photos_available" database table:
+                photos_available_summary = db.session.query(MarsPhotosAvailable).with_entities(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol, MarsPhotosAvailable.total_photos).group_by(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol).order_by(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol).all()
+
+                # Retrieve all existing records, sorted by rover name/earth date combo and sol, from the "mars_photo_details" database table:
+                photo_details_summary = db.session.query(MarsPhotoDetails).with_entities(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol,func.count(MarsPhotoDetails.pic_id).label("total_photos")).group_by(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol).order_by(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol).all()
+
+                # Return both retrieved-record lists to the calling function:
+                return photos_available_summary, photo_details_summary
+
+            elif trans_type == "mars_photo_details_get_counts_by_rover_and_earth_date":
+                # Retrieve and return all existing records, sorted by rover name (asc) and earth date (desc), from the "mars_photos_available" database table:
+                return db.session.query(MarsPhotosAvailable).with_entities(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date, MarsPhotosAvailable.total_photos).group_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date).order_by(MarsPhotosAvailable.rover_name,MarsPhotosAvailable.earth_date.desc()).all()
+
+            elif trans_type == "mars_photo_details":
+                # Retrieve and return all existing records, sorted by rover name (asc), earth date (desc), sol (asc), and pic id (asc) from the "mars_photo_details" database table:
+                return db.session.execute(db.select(MarsPhotoDetails).order_by(MarsPhotoDetails.rover_name, MarsPhotoDetails.earth_date.desc(), MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
+
+            elif trans_type == "mars_photo_details_rover_earth_date_combo":
+                # Capture optional arguments:
+                rover_name = kwargs.get("rover_name", None)
+                earth_date = kwargs.get("earth_date", None)
+
+                # Retrieve and return all existing records, sorted by sol and pic id, from the "mars_photo_details" database table for the rover name and earth date passed to this function:
+                return db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date).order_by(MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
+
+            elif trans_type == "mars_photo_details_rover_earth_date_combo_count":
+                # Capture optional arguments:
+                rover_name = kwargs.get("rover_name", None)
+                earth_date = kwargs.get("earth_date", None)
+
+                # Retrieve all existing records from the "mars_photo_details" database table for the rover name and earth date passed to this function:
+                records = db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date)).scalars().all()
+
+                # Return the count of retrieved records to the calling function:
+                return len(records)
+
+            elif trans_type == "mars_photos_available":
+                # Retrieve and return all existing records, sorted by rover name and earth date (latter = descending order) from the "mars_photos_available" database table:
+                return db.session.execute(db.select(MarsPhotosAvailable).order_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date.desc())).scalars().all()
+
+            elif trans_type == "mars_photos_by_rover_earth_date_combo":
+                # Capture optional argument:
+                rover_earth_date_combo = kwargs.get("rover_earth_date_combo", None)
+
+                # Retrieve and return all existing records, sorted by sol and pic id, from the "mars_photo_details" database table where the "rover_earth_date_combo" field matches the passed parameter:
+                return db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_earth_date_combo).order_by(MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
+
+            elif trans_type == "mars_rovers":
+                # Retrieve and return all existing records, sorted by rover name, from the "mars_rovers" database table where rovers are tagged as active (in terms of data production):
+                return db.session.execute(db.select(MarsRovers).where(MarsRovers.active == "Yes").order_by(MarsRovers.rover_name)).scalars().all()
+
+            elif trans_type == "space_news":
+                # Retrieve and return all existing records, sorted by article ID, from the "space_news" database table:
+                return db.session.execute(db.select(SpaceNews).orderby(SpaceNews.article_id)).scalars().all()
+
+    except:  # An error has occurred.
+        print(f"Error (retrieve_from_database ({trans_type})): {traceback.format_exc()}")
+        update_system_log("retrieve_from_database (" + trans_type + ")", traceback.format_exc())
+
+        # Return empty dictionary as a failed-execution indication to the calling function:
+        return {}
+
+
+def update_database(trans_type, item_to_process, **kwargs):
+    """Function to update this application's database based on the type of transaction"""
+    try:
+        with app.app_context():
+            if trans_type == "update_approaching_asteroids":
+                # Delete all records from the "approaching_asteroids" database table:
+                db.session.execute(db.delete(ApproachingAsteroids))
+                db.session.commit()
+
+                # Upload, to the "approaching_asteroids" database table, all contents of the "item_to_process" parameter:
+                new_records = []
+                for i in range(0, len(item_to_process)):
+                    new_record = ApproachingAsteroids(
+                        id=item_to_process[i]["id"],
+                        name=item_to_process[i]["name"],
+                        absolute_magnitude_h=item_to_process[i]["absolute_magnitude_h"],
+                        estimated_diameter_km_min=item_to_process[i]["estimated_diameter_km_min"],
+                        estimated_diameter_km_max=item_to_process[i]["estimated_diameter_km_max"],
+                        is_potentially_hazardous=item_to_process[i]["is_potentially_hazardous"],
+                        close_approach_date=item_to_process[i]["close_approach_date"],
+                        relative_velocity_km_per_s=item_to_process[i]["relative_velocity_km_per_s"],
+                        miss_distance_km=item_to_process[i]["miss_distance_km"],
+                        orbiting_body=item_to_process[i]["orbiting_body"],
+                        is_sentry_object=item_to_process[i]["is_sentry_object"],
+                        url=item_to_process[i]["url"]
+                    )
+
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+            elif trans_type == "update_confirmed_planets":
+                # Delete all records from the "confirmed_planets" database table:
+                db.session.execute(db.delete(ConfirmedPlanets))
+                db.session.commit()
+
+                # Upload, to the "confirmed_planets" database table, all contents of the "item_to_process" parameter:
+                new_records = []
+                for i in range(0, len(item_to_process)):
+                    new_record = ConfirmedPlanets(
+                        host_name=item_to_process[i]["hostname"],
+                        host_num_stars=item_to_process[i]["sy_snum"],
+                        host_num_planets=item_to_process[i]["sy_pnum"],
+                        planet_name=item_to_process[i]["pl_name"],
+                        discovery_year=item_to_process[i]["disc_year"],
+                        discovery_method=item_to_process[i]["discoverymethod"],
+                        discovery_facility=item_to_process[i]["disc_facility"],
+                        discovery_telescope=item_to_process[i]["disc_telescope"],
+                        url = f"https://exoplanetarchive.ipac.caltech.edu/overview/{item_to_process[i]["pl_name"].replace(" ","%20")}"
+                    )
+
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+            elif trans_type == "update_constellations":
+                # Delete all existing records from the "constellations" database table:
+                db.session.query(Constellations).delete()
+                db.session.commit()
+
+                # Upload, to the "constellations" database table, all contents of the "item_to_process"
+                # parameter (in this case, the "constellations_data" dictionary from the calling function):
+                new_records = []
+                for key in item_to_process:
+                    new_record = Constellations(
+                        name=key,
+                        abbreviation=item_to_process[key]["abbreviation"],
+                        nickname=item_to_process[key]["nickname"],
+                        url=item_to_process[key]["url"],
+                        area=item_to_process[key]["area"],
+                        myth_assoc=item_to_process[key]["myth_assoc"],
+                        first_appear=item_to_process[key]["first_appear"],
+                        brightest_star_name=item_to_process[key]["brightest_star_name"],
+                        brightest_star_url=item_to_process[key]["brightest_star_url"]
+                    )
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+            elif trans_type == "update_mars_photos_available":
+                # Delete all existing records from the "mars_photos_available" database table:
+                db.session.query(MarsPhotosAvailable).delete()
+                db.session.commit()
+
+                # Upload, to the "mars_photos_available" database table, all contents of the "item_to_process"
+                # parameter (in this case, the "photos_available" dictionary from the calling function):
+                new_records = []
+                for key in item_to_process:
+                    new_record = MarsPhotosAvailable(
+                        rover_earth_date_combo=key,
+                        rover_name=item_to_process[key]["rover_name"],
+                        sol=int(item_to_process[key]["sol"]),
+                        earth_date = item_to_process[key]["earth_date"],
+                        cameras=item_to_process[key]["cameras"],
+                        total_photos=item_to_process[key]["total_photos"]
+                    )
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+            elif trans_type == "update_mars_photo_details":
+                # Upload, to the "mars_photo_details" database table, all contents of the "item_to_process"
+                # parameter (in this case, the "photo_details_rover_earth_date_combo" list from the calling function):
+                new_records = []
+                for i in range(0, len(item_to_process)):
+                    new_record = MarsPhotoDetails(
+                        rover_earth_date_combo=item_to_process[i]["rover_earth_date_combo"],
+                        rover_name=item_to_process[i]["rover_name"],
+                        sol=int(item_to_process[i]["sol"]),
+                        pic_id=item_to_process[i]["pic_id"],
+                        earth_date = item_to_process[i]["earth_date"],
+                        camera_name=item_to_process[i]["camera_name"],
+                        camera_full_name=item_to_process[i]["camera_full_name"],
+                        url=item_to_process[i]["url"]
+                    )
+
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+            elif trans_type == "update_mars_photo_details_delete_existing":
+                # Capture optional arguments:
+                rover_name = kwargs.get("rover_name", None)
+                earth_date = kwargs.get("earth_date", None)
+
+                # Delete, from the "mars_photo_details" database table, all records where the rover name and
+                # earth date collectively match what was passed to this function:
+                db.session.execute(db.delete(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date))
+                db.session.commit()
+
+            elif trans_type == "update_space_news":
+                # Delete all records from the "space_news" database table:
+                db.session.execute(db.delete(SpaceNews))
+                db.session.commit()
+
+                # Import the newly acquired articles (from the "item_to_process" list) into the "space_news" database table:
+                new_records = []
+                for i in range(0, len(item_to_process)):
+                    new_record = SpaceNews(
+                        article_id=item_to_process[i]["id"],
+                        title=item_to_process[i]["title"],
+                        url=item_to_process[i]["url"],
+                        summary=item_to_process[i]["summary"],
+                        news_site=item_to_process[i]["news_site"],
+                        date_time_published=datetime.strptime(item_to_process[i]["published_at"], "%Y-%m-%dT%H:%M:%SZ"),
+                        date_time_updated=datetime.strptime(item_to_process[i]["updated_at"],"%Y-%m-%dT%H:%M:%S.%fZ")
+                    )
+                    new_records.append(new_record)
+
+                db.session.add_all(new_records)
+                db.session.commit()
+
+        # Return successful-execution indication to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        print(f"Error (update_database ({trans_type})): {traceback.format_exc()}")
+        update_system_log("update_database (" + trans_type + ")", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
+
+
+
+
+
+
+
+
 
 
 def export_data_to_spreadsheet_standard(data_scope, data_to_export):
@@ -603,11 +1193,17 @@ def export_data_to_spreadsheet_standard(data_scope, data_to_export):
         current_date_time = datetime.now()
         current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
 
-        # Create the workbook:
+        # Create the workbook.  If an error occurred, return failed-execution indication to the
+        # calling function:
         workbook = create_workbook(f"{spreadsheet_attributes[data_scope]["wrkbk_name"]}")
+        if workbook == None:
+            return False
 
-        # Create the worksheet to contain data from the "data_to_export" variable:
+        # Create the worksheet to contain data from the "data_to_export" variable.  If an error occurred,
+        # return failed-execution indication to the calling function:
         worksheet = create_worksheet(workbook, spreadsheet_attributes[data_scope]["wksht_name"])
+        if worksheet == None:
+            return False
 
         # Add and format the column headers:
         prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["headers"])
@@ -630,9 +1226,8 @@ def export_data_to_spreadsheet_standard(data_scope, data_to_export):
         # Return successful-execution indication to the calling function:
         return True
 
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Export '{data_scope}' Data to SS: {err}")
+    except:  # An error has occurred.
+        update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", traceback.format_exc())
 
         # Return failed-execution indication to the calling function:
         return False
@@ -651,8 +1246,11 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
         # Create the workbook:
         photos_available_workbook = xlsxwriter.Workbook(f"Mars Photos - Summary.xlsx")
 
-        # Create the worksheet to contain photos-available data from the "photos_available" list of database records:
+        # Create the worksheet to contain photos-available data from the "photos_available" list of database records.
+        # If an error occurred, exit this procedure:
         photos_available_worksheet = create_worksheet(photos_available_workbook, f"Summary")
+        if photos_available_worksheet == None:
+            exit()
 
         # Add and format the column headers:
         prepare_spreadsheet_main_contents(photos_available_workbook, photos_available_worksheet, "photos_available_headers")
@@ -674,11 +1272,6 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
         rovers_represented = get_mars_photos_summarize_photo_counts_by_rover_and_earth_year()
         if rovers_represented == []:
             exit()
-
-        # print(rovers_represented)
-        # print(len(rovers_represented))
-
-        # rovers_represented[1] = ('Opportunity', 30000)
 
         worksheets_needed = []
         row_start = 0
@@ -704,20 +1297,15 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
                     worksheets_needed.append((worksheet_to_add, earth_year, rover_name, rover_number_of_sheets_needed, row_start, row_end))
                     row_start = row_end
 
-        # for item in worksheets_needed:
-        #     print(item)
-        # print(worksheets_needed)
-        # print(len(worksheets_needed))
-
-        # exit()
-
         for i in range(0, len(worksheets_needed)):
             # Create the workbook:
             photo_details_workbook = xlsxwriter.Workbook(f"Mars Photos - Details - {worksheets_needed[i][0]}.xlsx")
 
-            # Create the worksheet to contain photo-details data from the "photo_details" list of database records:
-            # photo_details_worksheet = create_worksheet(photo_details_workbook, worksheets_needed[i][0])
+            # Create the worksheet to contain photo-details data from the "photo_details" list of database records.
+            # If an error occurred, exit this procedure:
             photo_details_worksheet = create_worksheet(photo_details_workbook, "Details")
+            if photo_details_worksheet == None:
+                exit()
 
             # Add and format the column headers:
             prepare_spreadsheet_main_contents(photo_details_workbook, photo_details_worksheet,"photo_details_headers")
@@ -756,19 +1344,19 @@ def get_confirmed_planets():
         # Execute API request:
         response = requests.get(URL_CONFIRMED_PLANETS)
         if response.status_code == 200:
-            # Delete the existing records in the "confirmed_planets" database table:
-            if not update_database("update_confirmed_planets_delete_existing", {}):
-                exit()
-
-            # Import the up-to-date data (from the JSON) into the "confirmed_planets" database table.
+            # Delete the existing records in the "confirmed_planets" database table and update same with
+            # the up-to-date data (from the JSON):
             # NOTE:  Scope of data: Solution Type = 'Published Confirmed'
-            if not update_database("update_confirmed_planets_import_new", response.json()):
+            if not update_database("update_confirmed_planets", response.json()):
                 exit()
 
             # Retrieve all existing records in the "confirmed_planets" database table. If the function
             # called returns an empty directory, end this procedure:
             confirmed_planets_data = retrieve_from_database("confirmed_planets")
             if confirmed_planets_data == {}:
+                exit()
+            # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
+            elif confirmed_planets_data == []:
                 exit()
 
             # Create and format a spreadsheet file (workbook) to contain all confirmed-planet data. If the function called returns an empty directory, end this procedure:
@@ -1092,196 +1680,16 @@ def get_constellation_data_nicknames(constellations):
         return {}
 
 
-def get_approaching_asteroids():
-    """Function that retrieves a list of asteroids based on closest approach to Earth"""
-    # Initialize variables to return info. to calling function:
-    return_has_json = False
-
-    current_date = datetime.now()
-    current_date_plus_30 = current_date + timedelta(days=7)
-
-    try:
-        # Execute the API request (limit: closest approach <= 7 days from today):
-        response = requests.get(URL_CLOSEST_APPROACH_ASTEROIDS + "?start_date=" + current_date.strftime("%Y-%m-%d") + "&end_date=" + current_date_plus_30.strftime("%Y-%m-%d") + "&api_key=" + API_KEY_CLOSEST_APPROACH_ASTEROIDS)
-
-        # Initialize variable to store collected necessary asteroid data:
-        approaching_asteroids = []
-
-        # If the API request was successful, display the results:
-        if response.status_code == 200:  # API request was successful.
-
-            # Capture desired fields from the returned JSON:
-            for key in response.json()["near_earth_objects"]:
-                for asteroid in response.json()["near_earth_objects"][key]:
-                    asteroid_dict = {
-                        "id": asteroid["id"],
-                        "name": asteroid["name"],
-                        "absolute_magnitude_h": asteroid["absolute_magnitude_h"],
-                        "estimated_diameter_km_min": asteroid["estimated_diameter"]["kilometers"]["estimated_diameter_min"],
-                        "estimated_diameter_km_max": asteroid["estimated_diameter"]["kilometers"]["estimated_diameter_max"],
-                        "is_potentially_hazardous": asteroid["is_potentially_hazardous_asteroid"],
-                        "close_approach_date": asteroid["close_approach_data"][0]["close_approach_date"],
-                        "relative_velocity_km_per_s": asteroid["close_approach_data"][0]["relative_velocity"]["kilometers_per_second"],
-                        "miss_distance_km": asteroid["close_approach_data"][0]["miss_distance"]["kilometers"],
-                        "orbiting_body": asteroid["close_approach_data"][0]["orbiting_body"],
-                        "is_sentry_object": asteroid["is_sentry_object"],
-                        "url": asteroid["nasa_jpl_url"]
-                        }
-
-                    # Add captured data for each asteroid (as a dictionary) to the "approaching_asteroids" list:
-                    approaching_asteroids.append(asteroid_dict)
-
-            # Delete the existing records in the "approaching_asteroids" database table:
-            if not update_database("update_asteroids_delete_existing", {}):
-                exit()
-
-            # Import the up-to-date data (from the "approaching_asteroids" list) into the "asteroids" database table.
-            if not update_database("update_asteroids_import_new", approaching_asteroids):
-                exit()
-
-            # Retrieve all existing records in the "approaching_asteroids" database table. If the function
-            # called returns an empty directory, end this procedure:
-            asteroids_data = retrieve_from_database("approaching_asteroids")
-            if asteroids_data == {}:
-                exit()
-
-            # Create and format a spreadsheet file (workbook) to contain all asteroids data. If the function called returns an empty directory, end this procedure:
-            if not export_data_to_spreadsheet_standard("approaching_asteroids", asteroids_data):
-                exit()
-
-            # Return the populated "asteroids" list:
-            return asteroids_data, True
-
-        else:  # API request failed.
-            return "Error: API request failed. Data cannot be obtained at this time.", False
-
-    except Exception as err:  # An error has occurred.
-        return "An error has occurred. Data cannot be obtained at this time.", False
-
-
-def get_astronomy_pic_of_the_day():
-    """Function to retrieve the astronomy picture of the day"""
-    # Initialize variables to be used for returning values to the calling function:
-    json = {}
-    copyright_details = ""
-    error_message = ""
-
-    try:
-        # Execute API request:
-        url = URL_ASTRONOMY_PIC_OF_THE_DAY + "?api_key=" + API_KEY_ASTRONOMY_PIC_OF_THE_DAY
-        response = requests.get(url)
-
-        # If the API request was successful, display the results:
-        if response.status_code == 200:  # API request was successful.
-            # print(
-            #     f"Astronomy pic of the day:\nTitle: {response.json()["title"]}\nExplanation: {response.json()["explanation"]}\nURL (HD): {response.json()["hdurl"]}\nURL (SD): {response.json()["url"]}\nMedia type: {response.json()["media_type"]}\nService version: {response.json()["service_version"]}")
-            json = response.json()
-
-            # If there is copyright info. included in the JSON, display it:
-            try:
-                # print(f"Copyright: {response.json()["copyright"].replace("\n", "")}")
-                copyright_details = f"Copyright: {response.json()["copyright"].replace("\n", "")}"
-            except:
-                pass
-        else:  # API request failed.
-            # Print error message:
-            # print("Error (Astronomy pic): API request failed. Data cannot be obtained at this time.")
-            error_message = "API request failed. Data cannot be obtained at this time."
-
-    except:  # An error has occurred.
-        print(f"Error (get_astronomy_pic_of_the_day): {traceback.format_exc()}")
-        update_system_log("get_astronomy_pic_of_the_day", traceback.format_exc())
-        error_message = "An error has occurred. Data cannot be obtained at this time."
-
-    finally:
-        # Return results to calling function:
-        return json, copyright_details, error_message
 
 
 
-def get_iss_location():
-    """Function to get the current location of the ISS and a link to view the map of same"""
-    # Initialize variables to be used for returning values to the calling function:
-    location_address = ""
-    location_url = ""
-
-    try:
-        # Execute API request:
-        response = requests.get(URL_ISS_LOCATION)
-
-        # If the API request was successful, display the results:
-        if response.status_code == 200:
-            latitude = response.json()["iss_position"]["latitude"]
-            longitude = response.json()["iss_position"]["longitude"]
-
-            # Execute API request (using the retrieved latitude and longitude, to
-            # get a link to a map of the ISS's current location:
-            url = URL_GET_LOC_FROM_LAT_AND_LON + "?lat=" + str(latitude) + "&lon=" + str(
-                longitude) + "&api_key=" + API_KEY_GET_LOC_FROM_LAT_AND_LON
-            response = requests.get(url)
-
-            # If the API request was successful, display the results:
-            if response.status_code == 200:  # API request was successful.
-                for key in response.json():
-                    if key == "error":  # Resulting JSON has an error key (possibly due to current location being over water).
-                        if response.json()["error"] == "Unable to geocode":  # ISS may currently be over water.
-                            location_address = "No terrestrial address is available.  ISS could be over water at the current time."
-
-                    else:  # Terrestrial address is available.
-                        # Display terrestrial address:
-                        location_address = response.json()["display_name"]
-
-                    # Break from the 'for' loop:
-                    break
-
-                # Prepare and display a link that points to the ISS's current location:
-                location_url = "https://maps.google.com/?q=" + str(latitude) + "," + str(longitude)
-                # location_url = "https://maps.google.com/maps?q=" + str(latitude) + "," + str(longitude)
-                # print(f"ISS Location (map): {url_map} (On the map, zoom out to get a better view.)")
-
-        else:  # API request failed.
-            # Print error message:
-            location_address = "API request failed. Data cannot be obtained at this time."
-            location_url = ""
-
-    except:  # An error has occurred.
-        print(f"Error (get_iss_location): {traceback.format_exc()}")
-        update_system_log("get_iss_location", traceback.format_exc())
-        location_address = "An error has occurred. Data cannot be obtained at this time."
-        location_url = ""
-
-    finally:
-        # Return location address and URL to the calling function:
-        return location_address, location_url
 
 
-def get_people_in_space_now():
-    """Function that retrieves a list of people currently in space at the present moment"""
-    # Initialize variables to return info. to calling function:
-    return_has_json = False
 
-    try:
-        # Execute the API request:
-        response = requests.get(URL_PEOPLE_IN_SPACE_NOW)
 
-        # If the API request was successful, display the results:
-        if response.status_code == 200:  # API request was successful.
-            # Sort the resulting JSON by person's name:
-            people_in_space_now = collections.OrderedDict(response.json().items())
 
-            # Iterate through the sorted JSON and display the results:
-            # for item in people_in_space_now["people"]:
-            #     print (f"Person's name: {item["name"]}; Craft: {item["craft"]}")
-            return people_in_space_now["people"], True
 
-        else:  # API request failed.
-            # print("Error (People in space now): API request failed. Data cannot be obtained at this time.")
-            return "Error: API request failed. Data cannot be obtained at this time.", False
 
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        # print(f"Error (People in space now): {err}")
-        return "An error has occurred. Data cannot be obtained at this time.", False
 
 
 def prepare_spreadsheet_main_contents(workbook, worksheet, name, **kwargs):
@@ -1575,7 +1983,6 @@ def setup_selenium_driver(url, width, height):
     return driver
 
 
-#*** BELOW = UNFINALIZED FUNCTIONS***
 
 def get_mars_photos():
     """Function to retrieve summary and detailed data pertaining to the photos taken by each rover exploring on Mars"""
@@ -1594,6 +2001,10 @@ def get_mars_photos():
         photos_available_summary, photo_details_summary = retrieve_from_database("mars_photo_details_compare_with_photos_available")
         if photos_available_summary == {}:
             exit()
+        # If an empty list was returned for "photos available", no records satisfied the query.  Therefore, exit this procedure:
+        elif photos_available_summary == []:
+            exit()
+
         else:
             # Initialize a variable for capturing rover/earth date combinations for which there is a mismatch
             # between the photos available and the corresponding photo details:
@@ -1622,11 +2033,17 @@ def get_mars_photos():
         photos_available = retrieve_from_database("mars_photos_available")
         if photos_available == {}:
             exit()
+        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
+        elif photos_available == []:
+            exit()
 
         # Retrieve a list of records from the "mars_photo_details database table.  If the function
         # called returns a failed-execution indication (i.e., an empty dictionary), end this procedure:
         photo_details = retrieve_from_database("mars_photo_details")
         if photo_details == {}:
+            exit()
+        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
+        elif photo_details == []:
             exit()
 
         # Export collected summary and detailed results to a spreadsheet workbook:
@@ -1646,6 +2063,9 @@ def get_mars_photos_summarize_photo_counts_by_rover_and_earth_year():
             # function called returns a failed-execution indication (i.e., an empty dictionary), end this procedure:
             photo_counts = retrieve_from_database("mars_photo_details_get_counts_by_rover_and_earth_date")
             if photo_counts == {}:
+                exit()
+            # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
+            elif photo_counts == []:
                 exit()
 
             # Initialize list variables needed to produce the final results to the calling function:
@@ -1762,6 +2182,9 @@ def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mis
                                                                rover_name=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
                                                                earth_date=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1])
 
+                if existing_record_count == {}:
+                    existing_record_count = "Not available due to error."
+
                 updated_record_count = \
                     photos_available[rover_earth_date_combo_mismatch_between_summaries[i]]["total_photos"]
 
@@ -1818,11 +2241,6 @@ def get_mars_photos_update_from_api(rover_name, earth_date):
         # Execute the API request.
         response = requests.get(url)
         if response.status_code == 200:  # API request was successful.
-            # Calculate the total number of photos
-            # total_photos = 0
-            # for item in response.json()['photos']:
-            #     total_photos += 1
-
             # Return the retrieved JSON to the calling function:
             return response.json()['photos']
 
@@ -1841,39 +2259,6 @@ def get_mars_photos_update_from_api(rover_name, earth_date):
         return {}
 
 
-def get_space_news():
-    """Function for retrieving the latest space news articles.rm"""
-    # Initialize variables to return to calling function:
-    success = True
-    error_message = ""
-
-    try:
-        # Execute API request:
-        response = requests.get(URL_SPACE_NEWS)
-        if response.status_code == 200:
-            # Delete the existing records in the "space_news" database table:
-            if update_database("update_space_news_delete_existing", {}):
-                # Import the newly acquired articles (from the JSON) into the "space_news" database table:
-                if not update_database("update_space_news_import_new", response.json()['results']):
-                    error_message = "Error: Space news articles cannot be obtained at this time."
-                    success = False
-            else:
-                error_message = "Error: Space news articles cannot be obtained at this time."
-                success = False
-
-        else:
-            error_message = "API request failed. Space news articles cannot be obtained at this time."
-            success = False
-
-    except:  # An error has occurred.
-        print(f"Error (get_space_news): {traceback.format_exc()}")
-        update_system_log("get_space_news", traceback.format_exc())
-        error_message = "An error has occurred. Space news articles cannot be obtained at this time."
-        success = False
-
-    finally:
-        # Return results to the calling function:
-        return success, error_message
 
 
 def update_system_log(activity, exception):
@@ -1890,289 +2275,8 @@ def update_system_log(activity, exception):
 
     f.close()
 
-def update_database(trans_type, item_to_process, **kwargs):
-    """Function to update this application's database based on the type of transaction"""
-    try:
-        with app.app_context():
-            if trans_type == "update_asteroids_delete_existing":
-                # Delete all records from the "approaching_asteroids" database table:
-                db.session.execute(db.delete(ApproachingAsteroids))
-                db.session.commit()
-
-            elif trans_type == "update_asteroids_import_new":
-                # Import the newly acquired 'approaching asteroids' data (from the "item_to_process" list) into the "confirmed_planets" database table:
-                new_records = []
-                for i in range(0, len(item_to_process)):
-                    new_record = ApproachingAsteroids(
-                        id=item_to_process[i]["id"],
-                        name=item_to_process[i]["name"],
-                        absolute_magnitude_h=item_to_process[i]["absolute_magnitude_h"],
-                        estimated_diameter_km_min=item_to_process[i]["estimated_diameter_km_min"],
-                        estimated_diameter_km_max=item_to_process[i]["estimated_diameter_km_max"],
-                        is_potentially_hazardous=item_to_process[i]["is_potentially_hazardous"],
-                        close_approach_date=item_to_process[i]["close_approach_date"],
-                        relative_velocity_km_per_s=item_to_process[i]["relative_velocity_km_per_s"],
-                        miss_distance_km=item_to_process[i]["miss_distance_km"],
-                        orbiting_body=item_to_process[i]["orbiting_body"],
-                        is_sentry_object=item_to_process[i]["is_sentry_object"],
-                        url=item_to_process[i]["url"]
-                    )
-
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_confirmed_planets_import_new":
-                # Import the newly acquired 'confirmed planets' data (from the "item_to_process" list) into the "confirmed_planets" database table:
-                new_records = []
-                for i in range(0, len(item_to_process)):
-                    new_record = ConfirmedPlanets(
-                        host_name=item_to_process[i]["hostname"],
-                        host_num_stars=item_to_process[i]["sy_snum"],
-                        host_num_planets=item_to_process[i]["sy_pnum"],
-                        planet_name=item_to_process[i]["pl_name"],
-                        discovery_year=item_to_process[i]["disc_year"],
-                        discovery_method=item_to_process[i]["discoverymethod"],
-                        discovery_facility=item_to_process[i]["disc_facility"],
-                        discovery_telescope=item_to_process[i]["disc_telescope"],
-                        url = f"https://exoplanetarchive.ipac.caltech.edu/overview/{item_to_process[i]["pl_name"].replace(" ","%20")}"
-                    )
-
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_confirmed_planets_delete_existing":
-                # Delete all records from the "confirmed_planets" database table:
-                db.session.execute(db.delete(ConfirmedPlanets))
-                db.session.commit()
-
-            if trans_type == "update_constellations":
-                # Delete all existing records from the "constellations" database table:
-                db.session.query(Constellations).delete()
-                db.session.commit()
-
-                # Upload, to the "constellations" database table, all contents of the "item_to_process"
-                # parameter (in this case, the "constellations_data" directory from the calling function):
-                new_records = []
-                for key in item_to_process:
-                    new_record = Constellations(
-                        name=key,
-                        abbreviation=item_to_process[key]["abbreviation"],
-                        nickname=item_to_process[key]["nickname"],
-                        url=item_to_process[key]["url"],
-                        area=item_to_process[key]["area"],
-                        myth_assoc=item_to_process[key]["myth_assoc"],
-                        first_appear=item_to_process[key]["first_appear"],
-                        brightest_star_name=item_to_process[key]["brightest_star_name"],
-                        brightest_star_url=item_to_process[key]["brightest_star_url"]
-                    )
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_mars_photos_available":
-                # Delete all existing records from the "mars_photos_available" database table:
-                db.session.query(MarsPhotosAvailable).delete()
-                db.session.commit()
-
-                # Upload, to the "mars_photos_available" database table, all contents of the "item_to_process"
-                # parameter (in this case, the "photos_available" directory from the calling function):
-                new_records = []
-                for key in item_to_process:
-                    new_record = MarsPhotosAvailable(
-                        rover_earth_date_combo=key,
-                        rover_name=item_to_process[key]["rover_name"],
-                        sol=int(item_to_process[key]["sol"]),
-                        earth_date = item_to_process[key]["earth_date"],
-                        cameras=item_to_process[key]["cameras"],
-                        total_photos=item_to_process[key]["total_photos"]
-                    )
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_mars_photo_details":
-                # Upload, to the "mars_photo_details" database table, all contents of the "item_to_process"
-                # parameter (in this case, the "photo_details_rover_earth_date_combo" list from the calling function):
-                new_records = []
-                for i in range(0, len(item_to_process)):
-                    new_record = MarsPhotoDetails(
-                        rover_earth_date_combo=item_to_process[i]["rover_earth_date_combo"],
-                        rover_name=item_to_process[i]["rover_name"],
-                        sol=int(item_to_process[i]["sol"]),
-                        pic_id=item_to_process[i]["pic_id"],
-                        earth_date = item_to_process[i]["earth_date"],
-                        camera_name=item_to_process[i]["camera_name"],
-                        camera_full_name=item_to_process[i]["camera_full_name"],
-                        url=item_to_process[i]["url"]
-                    )
-
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_mars_photo_details_delete_existing":
-                # Capture optional arguments:
-                rover_name = kwargs.get("rover_name", None)
-                earth_date = kwargs.get("earth_date", None)
-
-                # Delete, from the "mars_photo_details" database table, all records where the rover name and
-                # earth date match what was passed to this function:
-                db.session.execute(db.delete(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date))
-                db.session.commit()
-
-            elif trans_type == "update_space_news_import_new":
-                # Import the newly acquired articles (from the "item_to_process" list) into the "space_news" database table:
-                new_records = []
-                for i in range(0, len(item_to_process)):
-                    new_record = SpaceNews(
-                        article_id=item_to_process[i]["id"],
-                        title=item_to_process[i]["title"],
-                        url=item_to_process[i]["url"],
-                        summary=item_to_process[i]["summary"],
-                        news_site=item_to_process[i]["news_site"],
-                        date_time_published=datetime.strptime(item_to_process[i]["published_at"], "%Y-%m-%dT%H:%M:%SZ"),
-                        date_time_updated=datetime.strptime(item_to_process[i]["updated_at"],"%Y-%m-%dT%H:%M:%S.%fZ")
-                    )
-                    new_records.append(new_record)
-
-                db.session.add_all(new_records)
-                db.session.commit()
-
-            elif trans_type == "update_space_news_delete_existing":
-                # Delete all records from the "space_news" database table:
-                db.session.execute(db.delete(SpaceNews))
-                db.session.commit()
-
-        # Return successful-execution indication to the calling function:
-        return True
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars rover - Update database ({trans_type})': {err}")
-
-        # Return failed-execution indication to the calling function:
-        return False
 
 
-def retrieve_from_database(trans_type, **kwargs):
-    """Function to update this application's database based on the type of transaction"""
-    try:
-        with app.app_context():
-            if trans_type == "approaching_asteroids_by_close_approach_date":
-                # Capture optional arguments:
-                close_approach_date = kwargs.get("close_approach_date", None)
-
-                # Retrieve all existing records from the "approaching_asteroids" database table where the "close_approach_date" field matches the passed parameter:
-                return db.session.execute(db.select(ApproachingAsteroids).where(ApproachingAsteroids.close_approach_date == close_approach_date).order_by(ApproachingAsteroids.name)).scalars().all()
-
-            elif trans_type == "approaching_asteroids":
-                # Retrieve all existing records from the "approaching_asteroids" database table:
-                return db.session.execute(db.select(ApproachingAsteroids).order_by(ApproachingAsteroids.close_approach_date, ApproachingAsteroids.name)).scalars().all()
-
-            elif trans_type == "confirmed_planets":
-                # Retrieve all existing records from the "confirmed_planets" database table:
-                return db.session.execute(db.select(ConfirmedPlanets).order_by(ConfirmedPlanets.host_name, ConfirmedPlanets.planet_name)).scalars().all()
-
-            elif trans_type == "confirmed_planets_by_disc_year":
-                # Capture optional arguments:
-                disc_year = kwargs.get("disc_year", None)
-
-                # Retrieve all existing records from the "confirmed_planets" database table where the "discovery_year" field matches the passed parameter:
-                return db.session.execute(db.select(ConfirmedPlanets).where(ConfirmedPlanets.discovery_year == disc_year).order_by(ConfirmedPlanets.host_name, ConfirmedPlanets.planet_name)).scalars().all()
-
-            elif trans_type == "constellations":
-                # Retrieve all existing records from the "constellations" database table:
-                constellations_list = db.session.execute(db.select(Constellations)).scalars().all()
-                item_to_return = {}
-
-                # Populate the "item_to_return" dictionary will all retrieved records from the DB:
-                for i in range(0, len(constellations_list)):
-                    item_to_return.update({
-                        constellations_list[i].name: {
-                            "abbreviation": constellations_list[i].abbreviation,
-                            "nickname": constellations_list[i].nickname,
-                            "url": constellations_list[i].url,
-                            "area": constellations_list[i].area,
-                            "myth_assoc": constellations_list[i].myth_assoc,
-                            "first_appear": constellations_list[i].first_appear,
-                            "brightest_star_name": constellations_list[i].brightest_star_name,
-                            "brightest_star_url": constellations_list[i].brightest_star_url
-                        }
-                    })
-
-            elif trans_type == "mars_photos_available":
-                # Retrieve all existing records from the "mars_photos_available" database table:
-                # photos_available_list = db.session.execute(db.select(MarsPhotosAvailable)).scalars().all()
-                photos_available_list = db.session.execute(db.select(MarsPhotosAvailable).order_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date.desc())).scalars().all()
-                return photos_available_list
-
-            elif trans_type == "mars_photo_details":
-                # Retrieve all existing records from the "mars_photo_details" database table:
-                # return db.session.execute(db.select(MarsPhotoDetails).order_by(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
-                return db.session.execute(db.select(MarsPhotoDetails).order_by(MarsPhotoDetails.rover_name, MarsPhotoDetails.earth_date.desc(), MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
-
-            elif trans_type == "mars_photo_details_rover_earth_date_combo":
-                # Capture optional arguments:
-                rover_name = kwargs.get("rover_name", None)
-                earth_date = kwargs.get("earth_date", None)
-
-                # Retrieve all existing records from the "mars_photo_details" database table for the rover name and earth date passed to this function:
-                return db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date).order_by(MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
-
-            elif trans_type == "mars_photo_details_rover_earth_date_combo_count":
-                # Capture optional arguments:
-                rover_name = kwargs.get("rover_name", None)
-                earth_date = kwargs.get("earth_date", None)
-
-                # Retrieve all existing records from the "mars_photo_details" database table for the rover name and earth date passed to this function:
-                records = db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_name + "_" + earth_date)).scalars().all()
-                return len(records)
-
-            elif trans_type == "mars_photo_details_compare_with_photos_available":
-                photos_available_summary = db.session.query(MarsPhotosAvailable).with_entities(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol, MarsPhotosAvailable.total_photos).group_by(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol).order_by(MarsPhotosAvailable.rover_earth_date_combo, MarsPhotosAvailable.sol).all()
-                photo_details_summary = db.session.query(MarsPhotoDetails).with_entities(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol,func.count(MarsPhotoDetails.pic_id).label("total_photos")).group_by(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol).order_by(MarsPhotoDetails.rover_earth_date_combo, MarsPhotoDetails.sol).all()
-
-                return photos_available_summary, photo_details_summary
-
-            elif trans_type == "mars_photo_details_get_counts_by_rover_and_earth_date":
-                return db.session.query(MarsPhotosAvailable).with_entities(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date, MarsPhotosAvailable.total_photos).group_by(MarsPhotosAvailable.rover_name, MarsPhotosAvailable.earth_date).order_by(MarsPhotosAvailable.rover_name,MarsPhotosAvailable.earth_date.desc()).all()
-
-            elif trans_type == "mars_photos_by_rover_earth_date_combo":
-                # Capture optional arguments:
-                rover_earth_date_combo = kwargs.get("rover_earth_date_combo", None)
-
-                # Retrieve all existing records from the "mars_photo_details" database table where the "rover_earth_date_combo" field matches the passed parameter:
-                return db.session.execute(db.select(MarsPhotoDetails).where(MarsPhotoDetails.rover_earth_date_combo == rover_earth_date_combo).order_by(MarsPhotoDetails.sol, MarsPhotoDetails.pic_id)).scalars().all()
-
-            elif trans_type == "mars_rovers":
-                # Retrieve all existing records from the "mars_rovers" database table where rovers are tagged as active (in terms of data production):
-                item_to_return = []
-                active_mars_rovers = db.session.execute(db.select(MarsRovers).where(MarsRovers.active == "Yes")).scalars().all()
-
-                # Populate the "item_to_return" list will all retrieved records from the DB:
-                for i in range(0, len(active_mars_rovers)):
-                    item_to_return.append(active_mars_rovers[i].rover_name)
-
-            elif trans_type == "space_news":
-                # Retrieve all existing records from the "space_news" database table:
-                return db.session.execute(db.select(SpaceNews).orderby(SpaceNews.article_id)).scalars().all()
-
-        # Return populated "item_to_return" dictionary or list as a successful-execution indication to the calling function:
-        return item_to_return
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Retrieve from database ('{trans_type}'): {err}")
-
-        # Return empty dictionary as a failed-execution indication to the calling function:
-        return {}
 
 
 def run_apis():
@@ -2182,6 +2286,9 @@ def run_apis():
         # data production.  If the function called returns an empty list, end this procedure:
         mars_rovers = retrieve_from_database("mars_rovers")
         if mars_rovers == {}:
+            exit()
+        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
+        elif mars_rovers == []:
             exit()
 
         # get_mars_photos()
