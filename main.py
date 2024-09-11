@@ -29,6 +29,8 @@ from data import spreadsheet_attributes, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CON
 import traceback
 import email_validator
 import smtplib
+import wx
+import wx.lib.agw.pybusyinfo as PBI
 
 # from tkinter import messagebox
 
@@ -46,7 +48,7 @@ load_dotenv()
 # - For Closest Approach Asteroids: "Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/); API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach"
 
 # Define constant for web page loading-time allowance (in seconds) for the web-scrapers:
-WEB_LOADING_TIME_ALLOWANCE = 5
+WEB_LOADING_TIME_ALLOWANCE = 10
 
 # Initialize the Flask app. object
 app = Flask(__name__)
@@ -247,7 +249,7 @@ def home():
         # Go to the home page:
         return render_template("index.html")
     except:
-        print(f"Error (route: '/'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/'", traceback.format_exc())
 
 
@@ -260,7 +262,7 @@ def about():
         # Go to the "About" page:
         return render_template("about.html")
     except:
-        print(f"Error (route: '/about'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/about'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/about'", traceback.format_exc())
 
 
@@ -275,28 +277,74 @@ def admin_update():
 
         # Validate form entries upon submittal. Depending on the choices made via the form, perform additional processing:
         if form.validate_on_submit():
-            # Execute selected updates:
-            # ***From functions, get result of function execution and update web page***
-            if form.chk_approaching_asteroids.data:
-                pass
-            if form.chk_confirmed_planets.data:
-                pass
-            if form.chk_constellations.data:
-                pass
-            if form.chk_mars_photos.data:
-                pass
+            # Initialize variables necessary for capturing errors encountered during desired update:
+            update_status_approaching_asteroids = ""
+            update_status_confirmed_planets = ""
+            update_status_constellations = ""
+            update_status_mars_photos = ""
 
-            update_status = "Pretend all went well."
+            # Initiate a variable to support dialog for keeping user informed on update status:
+            app_wx = wx.App(redirect=False)
+
+            # Execute selected updates:
+            if form.chk_approaching_asteroids.data:  # Update to "approaching asteroids" is desired.
+                # Get results of obtaining and processing the desired information (use window dialog to keep user informed):
+                dlg = PBI.PyBusyInfo("Approaching Asteroids: Update in progress...", title="Administrative Update")
+                error_msg_approaching_asteroids, success_approaching_asteroids = get_approaching_asteroids()
+                dlg = None
+                if success_approaching_asteroids:
+                    update_status_approaching_asteroids = "Approaching Asteroids: Successfully updated."
+                else:
+                    update_status_approaching_asteroids = f"Approaching Asteroids: Update failed ({error_msg_approaching_asteroids})."
+
+            if form.chk_confirmed_planets.data:  # Update to "confirmed planets" is desired.
+                # Get results of obtaining and processing the desired information (use window dialog to keep user informed):
+                dlg = PBI.PyBusyInfo("Confirmed Planets: Update in progress...", title="Administrative Update")
+                error_msg_confirmed_planets, success_confirmed_planets = get_confirmed_planets()
+                dlg = None
+                if success_confirmed_planets:
+                    update_status_confirmed_planets = "Confirmed Planets: Successfully updated."
+                else:
+                    update_status_confirmed_planets = f"Confirmed Planets: Update failed ({error_msg_confirmed_planets})."
+
+            if form.chk_constellations.data:
+                # Get results of obtaining and processing the desired information (use window dialog to keep user informed):
+                dlg = PBI.PyBusyInfo("Constellations: Update in progress...", title="Administrative Update")
+                error_msg_constellations, success_constellations = get_constellation_data()
+                dlg = None
+                if success_constellations:
+                    update_status_constellations = "Constellations: Successfully updated."
+                else:
+                    update_status_constellations = f"Constellations: Update failed ({error_msg_constellations})."
+
+            if form.chk_mars_photos.data:
+                dlg = PBI.PyBusyInfo("Photos from Mars: Update in progress...", title="Administrative Update")
+                update_status_mars_photos = "TEST"
+                dlg = None
+
+            # Prepare final status-update text to pass to the "Administrative Update" page:
+            update_status = ""
+            if update_status_approaching_asteroids != "":
+                update_status += update_status_approaching_asteroids + "\n"
+            if update_status_confirmed_planets != "":
+                update_status += update_status_confirmed_planets + "\n"
+            if update_status_constellations != "":
+                update_status += update_status_constellations + "\n"
+            if update_status_mars_photos != "":
+                update_status += update_status_mars_photos + "\n"
+
+            # Destroy dialog app:
+            app_wx.MainLoop()
 
             # Go to the "Administrative Update" page and display the results of update execution:
             return render_template("admin_update.html", update_status=update_status)
 
-        # Go to the "Contact Us" page:
+        # Go to the "Administrative Update" page:
         return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>")
 
     except:  # An error has occurred.
-        print(f"Error (route: '/contact'): {traceback.format_exc()}")
-        update_system_log("route: '/contact'", traceback.format_exc())
+        dlg = wx.MessageBox(f"Error (route: '/admin_update'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
+        update_system_log("route: '/admin_update'", traceback.format_exc())
 
 
 # Configure route for "Approaching Asteroids" web page:
@@ -344,7 +392,7 @@ def approaching_asteroids():
         return render_template('approaching_asteroids.html', form=form, form_ss=form_ss)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
 
 
@@ -361,7 +409,7 @@ def astronomy_pic_of_day():
         return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/astronomy_pic_of_day'", traceback.format_exc())
 
 
@@ -410,7 +458,7 @@ def confirmed_planets():
         return render_template('confirmed_planets.html', form=form, form_ss=form_ss)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/confirmed_planets'", traceback.format_exc())
 
 
@@ -453,7 +501,7 @@ def constellations():
         return render_template('constellations.html', form=form, form_ss=form_ss)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/constellations'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/constellations'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/constellations'", traceback.format_exc())
 
 
@@ -478,7 +526,7 @@ def contact():
         return render_template("contact.html", form=form, msg_status="<<Message Being Drafted.>>")
 
     except:  # An error has occurred.
-        print(f"Error (route: '/contact'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/contact'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/contact'", traceback.format_exc())
 
 
@@ -527,7 +575,7 @@ def mars_photos():
         return render_template('mars_photos.html', form=form, form_ss=form_ss)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/mars_photos'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/mars_photos'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/mars_photos'", traceback.format_exc())
 
 
@@ -555,7 +603,7 @@ def space_news():
         return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/space_news'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/space_news'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/space_news'", traceback.format_exc())
 
 
@@ -572,7 +620,7 @@ def where_is_iss():
         return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""))
 
     except:  # An error has occurred.
-        print(f"Error (route: '/where_is_iss'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/where_is_iss'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/where_is_iss'", traceback.format_exc())
 
 
@@ -589,7 +637,7 @@ def who_is_in_space_now():
         return render_template("who_is_in_space_now.html", json=json, has_json=has_json)
 
     except:  # An error has occurred.
-        print(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}")
+        dlg = wx.MessageBox(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/who_is_in_space_now'", traceback.format_exc())
 
 
@@ -681,6 +729,13 @@ def email_from_contact_page(form):
         return "An error has occurred. Your message was not sent."
 
 
+def find_element(driver, find_type, find_details):
+    """Function to find an element via a web-scraping procedure"""
+    # NOTE: Error handling is deferred to the calling function:
+    if find_type == "xpath":
+        return driver.find_element(By.XPATH, find_details)
+
+
 def get_approaching_asteroids():
     """Function that retrieves and processes a list of asteroids based on closest approach to Earth"""
     # Capture the current date:
@@ -721,32 +776,39 @@ def get_approaching_asteroids():
                     approaching_asteroids.append(asteroid_dict)
 
             # Delete the existing records in the "approaching_asteroids" database table and update same with
-            # the up-to-date data (from the JSON).  If an error occurred, return a failed-execution indication
-            # to the calling function:
+            # the up-to-date data (from the JSON).  If an error occurred, update system log and return a
+            # failed-execution indication to the calling function:
             if not update_database("update_approaching_asteroids", approaching_asteroids):
+                update_system_log("get_approaching_asteroids", "Error: Database could not be updated. Data cannot be obtained at this time.")
                 return "Error: Database could not be updated. Data cannot be obtained at this time.", False
 
             # Retrieve all existing records in the "approaching_asteroids" database table. If the function
-            # called returns an empty directory, return a failed-execution indication to the calling function:
+            # called returns an empty directory, update system log and return a failed-execution indication
+            # to the calling function:
             asteroids_data = retrieve_from_database("approaching_asteroids")
             if asteroids_data == {}:
+                update_system_log("get_approaching_asteroids", "Error: Data cannot be obtained at this time.")
                 return "Error: Data cannot be obtained at this time.", False
 
-            # If an empty list was returned, no records satisfied the query.  Therefore, return a failed-
-            # execution indication to the calling function:
+            # If an empty list was returned, no records satisfied the query.  Therefore, update system log and
+            # return a failed-execution indication to the calling function:
             elif asteroids_data == []:
+                update_system_log("get_approaching_asteroids", "No matching records were retrieved.")
                 return "No matching records were retrieved.", False
 
-            # Create and format a spreadsheet file (workbook) to contain all asteroids data. If an error
-            # occurred, return failed-execution indication to the calling function:
+            # Create and format a spreadsheet file (workbook) to contain all asteroids data. If execution failed,
+            # update system log and return failed-execution indication to the calling function:
             if not export_data_to_spreadsheet_standard("approaching_asteroids", asteroids_data):
+                update_system_log("get_approaching_asteroids", "Error: Spreadsheet creation could not be completed at this time.")
                 return "Error: Spreadsheet creation could not be completed at this time.", False
 
-            # At this point, function is deemed to have executed successfully.  Return the populated
-            # "asteroids" list along with a successful-execution indication to the calling function:
-            return asteroids_data, True
+            # At this point, function is deemed to have executed successfully.  Update system log and
+            # return successful-execution indication to the calling function:
+            update_system_log("get_approaching_asteroids", "Successfully updated.")
+            return "", True
 
-        else:  # API request failed.
+        else:  # API request failed. Update system log and return failed-execution indication to the calling function:
+            update_system_log("get_approaching_asteroids", "Error: API request failed. Data cannot be obtained at this time.")
             return "Error: API request failed. Data cannot be obtained at this time.", False
 
     except:  # An error has occurred.
@@ -778,7 +840,8 @@ def get_astronomy_pic_of_the_day():
             except:
                 pass
 
-        else:  # API request failed.
+        else:  # API request failed.  Update system log and return failed-execution indication to the calling function:
+            update_system_log("get_astronomy_pic_of_the_day", "Error: API request failed. Data cannot be obtained at this time.")
             error_message = "API request failed. Data cannot be obtained at this time."
 
     except:  # An error has occurred.
@@ -788,6 +851,464 @@ def get_astronomy_pic_of_the_day():
     finally:
         # Return results to calling function:
         return json, copyright_details, error_message
+
+
+def get_confirmed_planets():
+    """Function for getting all needed data pertaining to confirmed planets and store such information in the space database supporting our website"""
+    try:
+        # Execute API request:
+        response = requests.get(URL_CONFIRMED_PLANETS)
+        if response.status_code == 200:
+            # Delete the existing records in the "confirmed_planets" database table and update same with
+            # the up-to-date data (from the JSON).  If execution failed, update system log and return
+            # failed-execution indication to the calling function::
+            # NOTE:  Scope of data: Solution Type = 'Published Confirmed'
+            if not update_database("update_confirmed_planets", response.json()):
+                update_system_log("get_confirmed_planets", "Error: Database could not be updated. Data cannot be obtained at this time.")
+                return "Error: Database could not be updated. Data cannot be obtained at this time.", False
+
+            # Retrieve all existing records in the "confirmed_planets" database table. If the function
+            # called returns an empty directory, update system log and return failed-execution indication
+            # to the calling function:
+            confirmed_planets_data = retrieve_from_database("confirmed_planets")
+            if confirmed_planets_data == {}:
+                update_system_log("get_confirmed_planets", "Error: Data cannot be obtained at this time.")
+                return "Error: Data cannot be obtained at this time.", False
+
+            # If an empty list was returned, no records satisfied the query.  Therefore, update system log and return
+            # failed-execution indication to the calling function:
+            elif confirmed_planets_data == []:
+                update_system_log("get_confirmed_planets", "No matching records were retrieved.")
+                return "No matching records were retrieved.", False
+
+            # Create and format a spreadsheet file (workbook) to contain all confirmed-planet data. If execution
+            # failed, update system log and return failed-execution indication to the calling function:
+            if not export_data_to_spreadsheet_standard("confirmed_planets", confirmed_planets_data):
+                update_system_log("get_confirmed_planets", "Error: Spreadsheet creation could not be completed at this time.")
+                return "Error: Spreadsheet creation could not be completed at this time.", False
+
+            # At this point, function is deemed to have executed successfully.  Update system log and return
+            # successful-execution indication to the calling function:
+            update_system_log("get_confirmed_planets", "Successfully updated.")
+            return "", True
+
+        else:  # API request failed.  Update system log and return failed-execution indication to the calling function:
+            update_system_log("get_confirmed_planets","Error: API request failed. Data cannot be obtained at this time.")
+            return "Error: API request failed. Data cannot be obtained at this time.", False
+
+    except:  # An error has occurred.
+        update_system_log("get_confirmed_planets", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return "An error has occurred. Data cannot be obtained at this time.", False
+
+
+def get_constellation_data():
+    """Function for getting all needed data pertaining to constellations and store such information in the space database supporting our website"""
+
+    try:
+        # Obtain a list of constellation using the skyfield.api library:
+        constellations = dict(load_constellation_names())
+
+        # If a constellation list has been obtained:
+        if constellations != {}:
+            # Get the nickname for each constellation identified.  If the function called returns an empty directory,
+            # update system log and return failed-execution indication to the calling function:
+            constellations_data = get_constellation_data_nicknames(constellations)
+            if constellations_data == {}:
+                update_system_log("get_constellation_data", "Error: Data (nicknames) cannot be obtained at this time.")
+                return "Error: Data (nicknames) cannot be obtained at this time.", False
+
+            # Get additional details for each constellation identified.  If the function called returns an empty directory,
+            # update system log and return failed-execution indication to the calling function:
+            constellations_added_details = get_constellation_data_added_details(constellations)
+            if constellations_added_details == {}:
+                update_system_log("get_constellation_data",
+                                  "Error: Data (added details) cannot be obtained at this time.")
+                return "Error: Data (added details) cannot be obtained at this time.", False
+
+            # Get area for each constellation identified.  If the function called returns an empty directory,
+            # update system log and return failed-execution indication to the calling function:
+            constellations_area = get_constellation_data_area(constellations)
+            if constellations_area == {}:
+                update_system_log("get_constellation_data", "Error: Data (areas) cannot be obtained at this time.")
+                return "Error: Data (areas) cannot be obtained at this time.", False
+
+            # Add the additional details (including area) to the main constellation dictionary:
+            for key in constellations_data:
+                constellations_data[key]["area"] = constellations_area[key]["area"]
+                constellations_data[key]["myth_assoc"] = constellations_added_details[key]["myth_assoc"]
+                constellations_data[key]["first_appear"] = constellations_added_details[key]["first_appear"]
+                constellations_data[key]["brightest_star_name"] = constellations_added_details[key][
+                    "brightest_star_name"]
+                constellations_data[key]["brightest_star_url"] = constellations_added_details[key]["brightest_star_url"]
+
+            # Delete the existing records in the "constellations" database table and update same with the
+            # contents of the "constellations_data" dictionary.  If the function called returns a failed-execution
+            # indication, update system log and return failed-execution indication to the calling function:
+            if not update_database("update_constellations", constellations_data):
+                update_system_log("get_constellation_data",
+                                  "Error: Database could not be updated. Data cannot be obtained at this time.")
+                return "Error: Database could not be updated. Data cannot be obtained at this time.", False
+
+            # Retrieve all existing records in the "constellations" database table. If the function
+            # called returns an empty directory, update system log and return failed-execution indication to the
+            # calling function:
+            constellations_data = retrieve_from_database("constellations")
+            if constellations_data == {}:
+                update_system_log("get_constellation_data", "Error: Data cannot be obtained at this time.")
+                return "Error: Data cannot be obtained at this time.", False
+
+            # Create and format a spreadsheet file (workbook) to contain all constellation data. If the function called returns
+            # a failed-execution indication, update system log and return a failed-execution indication to the calling function:
+            if not export_data_to_spreadsheet_standard("constellations", constellations_data):
+                update_system_log("get_constellation_data",
+                                  "Error: Spreadsheet creation could not be completed at this time.")
+                return "Error: Spreadsheet creation could not be completed at this time.", False
+
+            # At this point, function is deemed to have executed successfully.  Update system log and return
+            # successful-execution indication to the calling function:
+            update_system_log("get_constellation_data", "Successfully updated.")
+            return "", True
+
+        else:  # An error has occurred in processing constellation data.
+            update_system_log("get_constellation_data", "Error: Data cannot be obtained at this time.")
+            return "Error: Data cannot be obtained at this time.", False
+
+    except:  # An error has occurred.
+        update_system_log("get_constellation_data", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return "An error has occurred. Data cannot be obtained at this time.", False
+
+
+def get_constellation_data_added_details(constellations):
+    """Function for getting (via web-scraping) additional details for each constellation identified"""
+
+    try:
+        # Define a variable for storing the additional details for each constellation (to be scraped from the constellation map website):
+        constellations_added_details = {}
+
+        # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail). Accordingly, define variables to be used
+        # as part of the workaround to handle this constellation's data differently than the rest:
+        serpens_element_constellation_myth_assoc_text = ""
+        serpens_element_constellation_first_appear_text = ""
+        serpens_element_constellation_brightest_star_text = ""
+        serpens_element_constellation_brightest_star_url = ""
+
+        # Initiate and configure a Selenium object to be used for scraping website for additional constellation details.
+        # If function failed, update system log and return failed-execution to the calling function:
+        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_1, 1, 1)
+        if driver == None:
+            update_system_log("get_constellation_data_added_details", "Error: Selenium driver could not be created/configured.")
+            return {}
+
+        # Pause program execution to allow for constellation website loading time:
+        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
+
+        # Define special variables to handle the 'Serpens' constellation whose data spans 2 entries (head/tail) on the target website:
+        serpens_index = 0
+        serpens_list = ["Head: ", "Tail: "]
+
+        # Scrape the constellation map website to obtain additional details for each constellation:
+        for i in range(1,
+                       len(constellations) + 1 + 1):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website
+            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
+            element_constellation_name = find_element(driver, "xpath",
+                                                      '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(
+                                                          i) + ']/td[1]/a')
+            element_constellation_name_unidecoded = unidecode.unidecode(
+                element_constellation_name.get_attribute("text"))
+
+            # Find the element pertaining to the constellation's mythological association:
+            element_constellation_myth_assoc = find_element(driver, "xpath",
+                                                            '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(
+                                                                i) + ']/td[2]/div')
+            element_constellation_myth_assoc_text = element_constellation_myth_assoc.get_attribute("innerHTML")
+
+            # Find the element pertaining to the constellation's first appearance:
+            element_constellation_first_appear = find_element(driver, "xpath",
+                                                              '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(
+                                                                  i) + ']/td[3]/div')
+            element_constellation_first_appear_text = element_constellation_first_appear.get_attribute("innerHTML")
+
+            # Find the element pertaining to the constellation's brightest star.  Capture both text and url:
+            element_constellation_brightest_star = find_element(driver, "xpath",
+                                                                '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(
+                                                                    i) + ']/td[5]/a')
+            element_constellation_brightest_star_text = element_constellation_brightest_star.get_attribute(
+                "text").replace(" ", "").replace("\n", "")
+            element_constellation_brightest_star_url = element_constellation_brightest_star.get_attribute("href")
+
+            # Add the additional details collected above to the "constellation added details" dictionary:
+            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
+                serpens_element_constellation_myth_assoc_text += serpens_list[
+                                                                     serpens_index] + element_constellation_myth_assoc_text + " "
+                serpens_element_constellation_first_appear_text += serpens_list[
+                                                                       serpens_index] + element_constellation_first_appear_text + " "
+                serpens_element_constellation_brightest_star_text += serpens_list[
+                                                                         serpens_index] + element_constellation_brightest_star_text + " "
+                serpens_element_constellation_brightest_star_url += element_constellation_brightest_star_url + " "
+
+                constellations_added_details["Serpens"] = {
+                    "myth_assoc": serpens_element_constellation_myth_assoc_text,
+                    "first_appear": serpens_element_constellation_first_appear_text,
+                    "brightest_star_name": serpens_element_constellation_brightest_star_text,
+                    "brightest_star_url": serpens_element_constellation_brightest_star_url
+                }
+
+                serpens_index += 1
+
+            else:
+                constellations_added_details[element_constellation_name_unidecoded] = {
+                    "myth_assoc": element_constellation_myth_assoc_text,
+                    "first_appear": element_constellation_first_appear_text,
+                    "brightest_star_name": element_constellation_brightest_star_text,
+                    "brightest_star_url": element_constellation_brightest_star_url
+                }
+
+        # Sort the "constellations_added_details" dictionary in alphabetical order by its key (the constellation's name):
+        constellations_added_details = collections.OrderedDict(sorted(constellations_added_details.items()))
+
+        # Close and delete the Selenium driver object:
+        driver.close()
+        del driver
+
+        # Return the populated "constellations_added_details" dictionary to the calling function:
+        return constellations_added_details
+
+    except:  # An error has occurred.
+        update_system_log("get_constellation_data_added_details", traceback.format_exc())
+
+        # Return empty directory as a failed-execution indication to the calling function:
+        return {}
+
+
+def get_constellation_data_area(constellations):
+    """Function for getting (via web-scraping) the area for each constellation identified"""
+
+    try:
+        # Define a variable for storing the area for each constellation (to be scraped from the constellation map website):
+        constellations_area = {}
+
+        # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail). Accordingly, define variable to be used
+        # as part of the workaround to handle this constellation's data differently than the rest:
+        serpens_element_constellation_area_text = ""
+
+        # Initiate and configure a Selenium object to be used for scraping website for area (page 1).
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_2A, 1, 1)
+        if driver == None:
+            update_system_log("get_constellation_data_area", "Error: Selenium driver could not be created/configured.")
+            return {}
+
+        # Pause program execution to allow for constellation website loading time:
+        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
+
+        # Define special variables to handle the 'Serpens' constellation whose data spans 2 entries (head/tail) on the target website:
+        serpens_index = 0
+        serpens_list = ["Head: ", "Tail: "]
+
+        # Scrape the constellation map website to obtain additional details for each constellation:
+        for i in range(1,
+                       51):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website
+
+            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
+            try:
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(
+                                                              i) + ']/td[1]/a')
+            except:  # An added section (e.g., an ad) may displace all subsequent elements by one.
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[5]/div[2]/table/tbody/tr[' + str(
+                                                              i) + ']/td[1]/a')
+            element_constellation_name_unidecoded = unidecode.unidecode(
+                element_constellation_name.get_attribute("text"))
+
+            # Find the element pertaining to the constellation's area. Decode it to normalize to ASCII-based characters:
+            try:
+                element_constellation_area = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(
+                                                              i) + ']/td[2]')
+            except:  # An added section (e.g., an ad) may displace all subsequent elements by one.
+                element_constellation_area = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[5]/div[2]/table/tbody/tr[' + str(
+                                                              i) + ']/td[2]')
+            element_constellation_area_text = unidecode.unidecode(
+                element_constellation_area.get_attribute("innerHTML")).replace("&nbsp;", " ")
+
+            # Add the area collected above to the "constellations_area" dictionary:
+            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
+                serpens_element_constellation_area_text += serpens_list[
+                                                               serpens_index] + element_constellation_area_text + " "
+
+                constellations_area["Serpens"] = {
+                    "area": serpens_element_constellation_area_text
+                }
+
+                serpens_index += 1
+
+            else:
+                constellations_area[element_constellation_name_unidecoded] = {
+                    "area": element_constellation_area_text,
+                }
+
+        # Close and delete the Selenium driver object:
+        driver.close()
+        del driver
+
+        # Initiate and configure a Selenium object to be used for scraping website for area (page 2).
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_2B, 1, 1)
+        if driver == None:
+            update_system_log("get_constellation_data_area", "Error: Selenium driver could not be created/configured.")
+            return {}
+
+        # Pause program execution to allow for constellation website loading time:
+        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
+
+        # Scrape the constellation map website to obtain additional details for each constellation:
+        for i in range(51,
+                       len(constellations) + 1 + 2):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website, and added another because website contains an "Unknown constellation" that should not detract from reaching the end of the "constellations_data" dictionary.
+
+            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
+            try:
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(
+                                                              i - 50) + ']/td[1]/a')
+            except:  # An added section (e.g., an ad) may displace all subsequent elements by one.
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[5]/div[2]/table/tbody/tr[' + str(
+                                                              i - 50) + ']/td[1]/a')
+            element_constellation_name_unidecoded = unidecode.unidecode(
+                element_constellation_name.get_attribute("text"))
+
+            # Find the element pertaining to the constellation's area. Decode it to normalize to ASCII-based characters:
+            try:
+                element_constellation_area = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(
+                                                              i - 50) + ']/td[2]')
+            except:  # An added section (e.g., an ad) may displace all subsequent elements by one.
+                element_constellation_area = find_element(driver, "xpath",
+                                                          '/html/body/div/div[3]/div[1]/div[1]/div/div[5]/div[2]/table/tbody/tr[' + str(
+                                                              i - 50) + ']/td[2]')
+            element_constellation_area_text = unidecode.unidecode(
+                element_constellation_area.get_attribute("innerHTML")).replace("&nbsp;", " ")
+
+            # Add the area collected above to the "constellations_area" dictionary:
+            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
+                serpens_element_constellation_area_text += serpens_list[
+                                                               serpens_index] + element_constellation_area_text + " "
+
+                constellations_area["Serpens"] = {
+                    "area": serpens_element_constellation_area_text
+                }
+
+                serpens_index += 1
+
+            else:
+                constellations_area[element_constellation_name_unidecoded] = {
+                    "area": element_constellation_area_text,
+                }
+
+        # Close and delete the Selenium driver object:
+        driver.close()
+        del driver
+
+        # Sort the "constellations_area" dictionary in alphabetical order by its key (the constellation's name):
+        constellations_area = collections.OrderedDict(sorted(constellations_area.items()))
+
+        # Return the populated "constellations_area" dictionary to the calling function:
+        return constellations_area
+
+    except:  # An error has occurred.
+        update_system_log("get_constellation_data_area", traceback.format_exc())
+
+        # Return empty directory as a failed-execution indication to the calling function:
+        return {}
+
+
+def get_constellation_data_nicknames(constellations):
+    """Function for getting (via web-scraping) the nickname for each constellation identified"""
+
+    try:
+        # Define a variable for storing the final (sorted) dictionary of data for each constellation
+        # (for a better-formatted JSON without the "OrderedDict" qualifier):
+        constellations_data = {}
+
+        # Initiate and configure a Selenium object to be used for scraping the constellation map website.
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        driver = setup_selenium_driver(URL_CONSTELLATION_MAP_SITE, 1, 1)
+        if driver == None:
+            update_system_log("get_constellation_data_nicknames", "Error: Selenium driver could not be created/configured.")
+            return {}
+
+        # Pause program execution to allow for constellation website loading time:
+        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
+
+        # Define a variable for storing the nicknames of each constellation (to be scraped from the constellation map website):
+        constellation_nicknames = {}
+
+        # Scrape the constellation map website to obtain the nicknames of each constellation:
+        for i in range(1, len(constellations) + 1):
+            try:
+                # Find the element pertaining to the constellation's name:
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(
+                                                              i) + ']/div/article/div[2]/header/h2/a')
+
+            except:  # Some of the constellations may use a different path than the above.
+                # Find the element pertaining to the constellation's name:
+                element_constellation_name = find_element(driver, "xpath",
+                                                          '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(
+                                                              i) + ']/div/article/div[2]/header/h3/a')
+
+            # From the scraping performed above, decode the constellation's name to normalize to ASCII-based characters:
+            element_constellation_name_unidecoded = unidecode.unidecode(element_constellation_name.text)
+
+            # Find the element pertaining to the constellation's nickname. Decode it to normalize to ASCII-based characters:
+            element_constellation_nickname = find_element(driver, "xpath",
+                                                          '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(
+                                                              i) + ']/div/article/div[2]/div/p')
+            element_constellation_nickname_unidecoded = unidecode.unidecode(element_constellation_nickname.text)
+
+            # Add the nickname to the "constellation nicknames" dictionary:
+            constellation_nicknames[element_constellation_name_unidecoded] = element_constellation_nickname_unidecoded
+
+        # Sort the "constellation_nicknames" dictionary in alphabetical order by its key (the constellation's name):
+        constellation_nicknames = collections.OrderedDict(sorted(constellation_nicknames.items()))
+
+        # Close and delete the Selenium driver object:
+        driver.close()
+        del driver
+
+        # Define a variable for storing the (unsorted) dictionary of data for each constellation:
+        constellations_unsorted = {}
+
+        # For each constellation identified, prepare its dictionary entry:
+        for key in constellations:
+            constellations_unsorted[constellations[key]] = {"abbreviation": key,
+                                                            "nickname": constellation_nicknames[constellations[key]],
+                                                            "url": "https://www.go-astronomy.com/constellations.php?Name=" +
+                                                                   constellations[key].replace(" ", "%20")}
+
+        # Sort the (unsorted) dictionary in alphabetical order by its key (the constellation's name):
+        constellations_sorted = collections.OrderedDict(sorted(constellations_unsorted.items()))
+
+        # For each constellation identified, prepare its dictionary entry:
+        for key in constellations_sorted:
+            constellations_data[key] = {"abbreviation": constellations_sorted[key]["abbreviation"],
+                                        "nickname": constellations_sorted[key]["nickname"],
+                                        "url": constellations_sorted[key]["url"]}
+
+        # Return the populated "constellations_data" dictionary to the calling function:
+        return constellations_data
+
+    except:  # An error has occurred.
+        update_system_log("get_constellation_data_nicknames", traceback.format_exc())
+
+        # Return empty directory as a failed-execution indication to the calling function:
+        return {}
 
 
 def get_iss_location():
@@ -828,7 +1349,8 @@ def get_iss_location():
                 # Prepare and display a link that points to the ISS's current location:
                 location_url = "https://maps.google.com/?q=" + str(latitude) + "," + str(longitude)
 
-        else:  # API request failed.
+        else:  # API request failed.  Update system log and return failed-execution indication to the calling function:
+            update_system_log("get_iss_location", "Error: API request failed. Data cannot be obtained at this time.")
             location_address = "API request failed. Data cannot be obtained at this time."
             location_url = ""
 
@@ -840,6 +1362,267 @@ def get_iss_location():
     finally:
         # Return location address and URL to the calling function:
         return location_address, location_url
+
+
+def get_mars_photos():
+    """Function to retrieve summary and detailed data pertaining to the photos taken by each rover exploring on Mars"""
+    global mars_rovers
+
+    try:
+        # Retrieve, from the database, a list of all rovers that are currently active for purposes of
+        # data production.  If the function called returns an empty list, update system log and return
+        # failed-execution indication to the calling function:
+        mars_rovers = retrieve_from_database("mars_rovers")
+        if mars_rovers == {}:
+            update_system_log("get_mars_photos", "Error: Data (Mars rovers) cannot be obtained at this time.")
+            return "Error: Data (Mars rovers) cannot be obtained at this time.", False
+
+        # If an empty list was returned, no records satisfied the query.  Therefore, update system log and
+        # return failed-execution indication to the calling function:
+        elif mars_rovers == []:
+            update_system_log("get_mars_photos", "No matching records were retrieved (Mars rovers).")
+            return "No matching records were retrieved (Mars rovers).", False
+
+        # Inform user that database will be checked for updates:
+        dlg = PBI.PyBusyInfo("Photos from Mars: Checking for updates needed...", title="Administrative Update")
+
+        # Prepare a dictionary which summarizes photos available by rover and earth date. If the function returns
+        # an empty dictionary, update system log and return failed-execution indication to the calling function:
+        photos_available = get_mars_photos_summarize_photos_available({})
+        if photos_available == {}:
+            update_system_log("get_mars_photos", "Error: Data (photos, summarize available) cannot be obtained at this time.")
+            return "Error: Data (photos, summarize available) cannot be obtained at this time.", False
+
+        # Obtain respective dictionaries summarizing photos available and the corresponding contents of the
+        # "mars_photo_details" database table. If the function returns an empty directory for the former,
+        # update system log and return failed-execution indication to the calling function:
+        photos_available_summary, photo_details_summary = retrieve_from_database("mars_photo_details_compare_with_photos_available")
+        if photos_available_summary == {}:
+            update_system_log("get_mars_photos", "Error: Data (photos, pre-update check) cannot be obtained at this time.")
+            return "Error: Data (photos, pre-update check) cannot be obtained at this time.", False
+
+        # If an empty list was returned for "photos available", no records satisfied the query.  Therefore,
+        # update system log and return failed-execution indication to the calling function:
+        elif photos_available_summary == []:
+            update_system_log("get_mars_photos", "No matching records were retrieved (photos, pre-update check).")
+            return "No matching records were retrieved (photos, pre-update check).", False
+
+        else:
+            # Initialize a variable for capturing rover/earth date combinations for which there is a mismatch
+            # between the photos available and the corresponding photo details:
+            rover_earth_date_combo_mismatch_between_summaries = []
+
+            # Compare photos available with the corresponding contents of the "mars_photo_details" database table:
+            if photos_available_summary == photo_details_summary:  # Database is up to date.  No API requests are needed.
+                dlg = PBI.PyBusyInfo("Photos from Mars: Database is up to date. Proceeding to export results to spreadsheet files...", title="Administrative Update")
+
+            else:  # Database (specifically the "mars_photo_details" needs updating.
+                dlg = PBI.PyBusyInfo("Photos from Mars: Photo details table needs updating.  Update in progress...", title="Administrative Update")
+
+                # Capture a list of the rover/earth date combinations for which there is a mismatch
+                # between the photos available and the corresponding photo details:
+                for i in range(0, len(photos_available_summary)):
+                    if not(photos_available_summary[i] in photo_details_summary):
+                        rover_earth_date_combo_mismatch_between_summaries.append(photos_available_summary[i][0])
+
+            # Perform required database updates based on whether any mismatches were identified above.
+            # If the function called returns a failed-execution indication, update system log and return
+            # failed-execution indication to the calling function:
+            if not get_mars_photos_update_database(photos_available, rover_earth_date_combo_mismatch_between_summaries):
+                update_system_log("get_mars_photos", "Error: Data (photos, post-details-update) cannot be obtained at this time.")
+                return "Error: Data (photos, post-details-update) cannot be obtained at this time.", False
+
+        # Provide user an update before proceeding to export results to spreadsheet files:
+        dlg = PBI.PyBusyInfo("Photos from Mars: Proceeding to export results to spreadsheet files...", title="Administrative Update")
+
+        # Retrieve a list of records from the "mars_photos_available" database table.  If the function
+        # called returns a failed-execution indication (i.e., an empty dictionary), update system log and
+        # return failed-execution indication to the calling function:
+        photos_available = retrieve_from_database("mars_photos_available")
+        if photos_available == {}:
+            update_system_log("get_mars_photos", "Error: Data (photos, post-update) cannot be obtained at this time.")
+            return "Error: Data (photo, post-update) cannot be obtained at this time.", False
+
+        # If an empty list was returned, no records satisfied the query.  Therefore, update system log and
+        # return failed-execution indication to the calling function:
+        elif photos_available == []:
+            update_system_log("get_mars_photos", "No matching records were retrieved (photos, post-update).")
+            return "No matching records were retrieved (photos, post-update).", False
+
+        # Retrieve a list of records from the "mars_photo_details database table.  If the function
+        # called returns a failed-execution indication (i.e., an empty dictionary), update system log
+        # and return failed-execution indication to the calling function:
+        photo_details = retrieve_from_database("mars_photo_details")
+        if photo_details == {}:
+            update_system_log("get_mars_photos", "Error: Data cannot be obtained at this time.")
+            return "Error: Data cannot be obtained at this time.", False
+
+        # If an empty list was returned, no records satisfied the query.  Therefore, update system log
+        # and return failed-execution indication to the calling function:
+        elif photo_details == []:
+            update_system_log("get_mars_photos", "No matching records were retrieved.")
+            return "No matching records were retrieved.", False
+
+        # Export collected summary and detailed results to a spreadsheet workbook:
+        if not export_mars_photos_to_spreadsheet(photos_available, photo_details):
+            update_system_log("get_mars_photos","Error: Spreadsheet creation could not be completed at this time.")
+            return "Error: Spreadsheet creation could not be completed at this time.", False
+
+        # At this point, function is deemed to have executed successfully.  Update system log and return
+        # successful-execution indication to the calling function:
+        update_system_log("get_mars_photos", "Successfully updated.")
+        return "", True
+
+    except:  # An error has occurred.
+        update_system_log("get_mars_photos", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return "An error has occurred. Data cannot be obtained at this time.", False
+
+
+def get_mars_photos_summarize_photo_counts_by_rover_and_earth_year():
+    """Function to summarize photo counts by rover and earth year.  This supports final spreadsheet creation"""
+    try:
+        # with app.app_context():
+        # Get counts (by rover name and year of earth date) from "mars_photo_details" database table. If the
+        # function called returns a failed-execution indication (i.e., an empty dictionary), update system log
+        # and return failed-execution indication to the calling function:
+        photo_counts = retrieve_from_database("mars_photo_details_get_counts_by_rover_and_earth_date")
+        if photo_counts == {}:
+            update_system_log("get_mars_photos_summarize_photo_counts_by_rover_and_earth_year",
+                              "Error: Data could not be obtained at this time.")
+            return []
+
+        # If an empty list was returned, no records satisfied the query.  Therefore, update system log and return
+        # failed-execution indication to the calling function:
+        elif photo_counts == []:
+            update_system_log("get_mars_photos_summarize_photo_counts_by_rover_and_earth_year",
+                              "Error: No matching records were retrieved.")
+            return []
+
+        # Initialize list variables needed to produce the final results to the calling function:
+        photo_count_grouping_1 = []
+        photo_count_grouping_2 = []
+
+        # Add a rover name/earth year combo value to the results obtained above, and add all to a list:
+        for item in photo_counts:
+            photo_count_grouping_1.append([item[0], item[1], item[0] + "_" + item[1][:4], item[2]])
+
+        # Iterate through the list created above, summarize photo counts by rover name/earth year combo, and
+        # populate list with summarized data:
+        # Capture the first row of data:
+        rover_name_a = photo_count_grouping_1[0][0]
+        earth_year_a = photo_count_grouping_1[0][1][:4]
+        rover_earth_date_combo_a = photo_count_grouping_1[0][2]
+        total_photos_a = photo_count_grouping_1[0][3]
+
+        # Capture the next row of date.  Compare the rover/earth year combo with the combo from
+        # the previous row.  Iterate through this process until the end of the data set has been
+        # reached:
+        for i in range(1, len(photo_count_grouping_1)):
+            # Capture the next row of data:
+            rover_name_b = photo_count_grouping_1[i][0]
+            earth_year_b = photo_count_grouping_1[i][1][:4]
+            rover_earth_date_combo_b = photo_count_grouping_1[i][2]
+            total_photos_b = photo_count_grouping_1[i][3]
+
+            # Compare the rover/earth year combo with the combo from the previous row:
+            if rover_earth_date_combo_b != rover_earth_date_combo_a:  # New rover/earth year combo has been reached.
+                # Append the final photo count for the previous row (whose final row has been reached) to the
+                # final list to be returned to the calling function:
+                photo_count_grouping_2.append([rover_name_a, earth_year_a, rover_earth_date_combo_a, total_photos_a])
+                rover_name_a = rover_name_b
+                earth_year_a = earth_year_b
+                rover_earth_date_combo_a = rover_earth_date_combo_b
+                total_photos_a = total_photos_b
+            else:  # New rover/earth year combo has NOT been reached.
+                # Continue tallying the running total for the current combo.
+                total_photos_a += total_photos_b
+
+        # Capture the final total photo count for the final rover/earth date combo (whose final row
+        # has been reached), and append it to the final list to be returned to the calling function:
+        photo_count_grouping_2.append([rover_name_a, earth_year_a, rover_earth_date_combo_a, total_photos_a])
+
+        # Return resulting list to the calling function:
+        return photo_count_grouping_2
+
+    except:  # An error has occurred.
+        update_system_log("get_mars_photos_summarize_photo_counts_by_rover_and_earth_year", traceback.format_exc())
+
+        # Return empty dictionary as a failed-execution indication to the calling function:
+        return []
+
+
+def get_mars_photos_summarize_photos_available(photos_available):
+    """Function to summarize photos available.  This supports final spreadsheet creation"""
+
+    try:
+        # Perform the following for each rover that is currently active:
+        for rover_name in mars_rovers:
+            # Execute the API request:
+            url = URL_MARS_ROVER_PHOTOS_BY_ROVER + rover_name + "?api_key=" + API_KEY_MARS_ROVER_PHOTOS
+            response = requests.get(url)
+
+            # If API request was successful, capture desired data elements:
+            if response.status_code == 200:  # API request was successful.
+                i = 0
+                for item in response.json()['photo_manifest']['photos']:
+                    photos_available[rover_name + "_" + str(item["earth_date"])] = {
+                        "sol": item["sol"],
+                        "rover_name": rover_name,
+                        "earth_date": item["earth_date"],
+                        "total_photos": item['total_photos'],
+                        "cameras": ','.join(item["cameras"])
+                    }
+
+                if photos_available == {}:
+                    update_system_log("get_mars_photos_summarize_photos_available",f"No photos are available for Mars rover '{rover_name}'")
+                    return {}
+
+            else:  # API request failed.  Update system log and return failed-execution indication to the calling function:
+                # Update system log and return failed-execution indication to the calling function:
+                update_system_log("get_mars_photos_summarize_photos_available",f"API request failed. No photos are available for Mars rover '{rover_name}'")
+                return {}
+
+        # Delete the existing records in the "mars_photos_available" database table and update same with the
+        # contents of the "photos_available" dictionary.  If the function returns a failed-execution
+        # indication, update system log and return failed-execution indication to the calling function:
+        if not update_database("update_mars_photos_available", photos_available):
+            update_system_log("get_mars_photos_summarize_photos_available","Error: Database could not be updated. Data cannot be obtained at this time.")
+            return {}
+
+        # Return populated "photos_available" dictionary to the calling function:
+        return photos_available
+
+    except:  # An error has occurred.
+        update_system_log("get_mars_photos_summarize_photos_available", traceback.format_exc())
+
+        # Return empty dictionary as a failed-execution indication to the calling function:
+        return {}
+
+
+def get_mars_photos_update_from_api(rover_name, earth_date):
+    """Function to retrieve, via an API request, photos available for a particular rover/earth date combination"""
+    try:
+        # Identify the URL which will be used as part of the API request:
+        url = URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA + rover_name + "/photos/?api_key=" + API_KEY_MARS_ROVER_PHOTOS + "&earth_date=" + earth_date
+
+        # Execute the API request.
+        response = requests.get(url)
+        if response.status_code == 200:  # API request was successful.
+            # Return the retrieved JSON to the calling function:
+            return response.json()['photos']
+
+        else:  # API request failed.  Update system log and return failed-execution indication to the calling function:
+            # Inform the user that the photos cannot be obtained at this time:
+            update_system_log("get_mars_photos_update_from_api", "Error: API request failed. Data (for Rover: '{rover_name}', Earth Date {earth_date}) cannot be obtained at this time.")
+            return {}
+
+    except:  # An error has occurred.
+        update_system_log("get_mars_photos_update_from_api", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return {}
 
 
 def get_people_in_space_now():
@@ -856,7 +1639,8 @@ def get_people_in_space_now():
             # Return the sorted JSON to the calling function:
             return people_in_space_now["people"], True
 
-        else:  # API request failed.
+        else:  # API request failed. Update system log and return failed-execution indication to the calling function:
+            update_system_log("get_people_in_space_now", "Error: API request failed. Data cannot be obtained at this time.")
             return "Error: API request failed. Data cannot be obtained at this time.", False
 
     except:  # An error has occurred.
@@ -866,22 +1650,25 @@ def get_people_in_space_now():
 
 
 def get_space_news():
-    """Function for retrieving the latest space news articles.rm"""
-    # Initialize variables to return to calling function:
-    success = True
-    error_message = ""
-
+    """Function for retrieving the latest space news articles"""
     try:
+        # Initialize variables to return to calling function:
+        success = True
+        error_message = ""
+
         # Execute API request:
         response = requests.get(URL_SPACE_NEWS)
         if response.status_code == 200:
             # Delete the existing records in the "space_news" database table and update same with
-            # the newly acquired articles (from the JSON):
+            # the newly acquired articles (from the JSON).  If function failed, update system log
+            # and return failed-execution indication to the calling function:
             if not update_database("update_space_news", response.json()['results']):
+                update_system_log("update_space_news", "Error: Space news articles cannot be obtained at this time.")
                 error_message = "Error: Space news articles cannot be obtained at this time."
                 success = False
 
-        else:
+        else:  # API request failed. Update system log and return failed-execution calling function:
+            update_system_log("get_space_news", "Error: API request failed. Data cannot be obtained at this time.")
             error_message = "API request failed. Space news articles cannot be obtained at this time."
             success = False
 
@@ -896,7 +1683,7 @@ def get_space_news():
 
 
 def retrieve_from_database(trans_type, **kwargs):
-    """Function to update this application's database based on the type of transaction"""
+    """Function to retrieve data from this application's database based on the type of transaction"""
     try:
         with app.app_context():
             if trans_type == "approaching_asteroids":
@@ -1003,11 +1790,38 @@ def retrieve_from_database(trans_type, **kwargs):
                 return db.session.execute(db.select(SpaceNews).orderby(SpaceNews.article_id)).scalars().all()
 
     except:  # An error has occurred.
-        print(f"Error (retrieve_from_database ({trans_type})): {traceback.format_exc()}")
         update_system_log("retrieve_from_database (" + trans_type + ")", traceback.format_exc())
 
         # Return empty dictionary as a failed-execution indication to the calling function:
         return {}
+
+
+def setup_selenium_driver(url, width, height):
+    """Function for initiating and configuring a Selenium driver object"""
+
+    try:
+        # Keep Chrome browser open after program finishes:
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_experimental_option("detach", True)
+
+        # Create and configure the Chrome driver (pass above options into the web driver):
+        driver = webdriver.Chrome(options=chrome_options)
+
+        # Access the desired URL.
+        driver.get(url)
+
+        # Set window position and dimensions, with the latter being large enough to display the website's elements needed:
+        driver.set_window_position(0, 0)
+        driver.set_window_size(width, height)
+
+        # Return the Selenium driver object to the calling function:
+        return driver
+
+    except:  # An error has occurred.
+        update_system_log("setup_selenium_driver", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return None
 
 
 def update_database(trans_type, item_to_process, **kwargs):
@@ -1171,12 +1985,30 @@ def update_database(trans_type, item_to_process, **kwargs):
         return True
 
     except:  # An error has occurred.
-        print(f"Error (update_database ({trans_type})): {traceback.format_exc()}")
         update_system_log("update_database (" + trans_type + ")", traceback.format_exc())
 
         # Return failed-execution indication to the calling function:
         return False
 
+
+def update_system_log(activity, log):
+    """Function to update the system log, either to log errors encountered or log successful execution of milestone admin. updates"""
+    try:
+        # Capture current date/time:
+        current_date_time = datetime.now()
+        current_date_time_file = current_date_time.strftime("%Y-%m-%d")
+
+        # Update log file.  If log file does not exist, create it:
+        with open("log_eye_for_space_" + current_date_time_file + ".txt", "a") as f:
+            f.write(datetime.now().strftime("%Y-%m-%d @ %I:%M %p") + ":\n")
+            f.write(activity + ": " + log + "\n")
+
+        # Close the log file:
+        f.close()
+
+    except:
+        dlg = wx.MessageBox(f"Error: System log could not be updated.\n{traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
+        dlg = None
 
 
 
@@ -1193,16 +2025,18 @@ def export_data_to_spreadsheet_standard(data_scope, data_to_export):
         current_date_time = datetime.now()
         current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
 
-        # Create the workbook.  If an error occurred, return failed-execution indication to the
-        # calling function:
+        # Create the workbook.  If an error occurred, update system log and return
+        # failed-execution indication to the calling function:
         workbook = create_workbook(f"{spreadsheet_attributes[data_scope]["wrkbk_name"]}")
         if workbook == None:
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Workbook could not be created.")
             return False
 
         # Create the worksheet to contain data from the "data_to_export" variable.  If an error occurred,
-        # return failed-execution indication to the calling function:
+        # update system log and return failed-execution indication to the calling function:
         worksheet = create_worksheet(workbook, spreadsheet_attributes[data_scope]["wksht_name"])
         if worksheet == None:
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Worksheet could not be created.")
             return False
 
         # Add and format the column headers:
@@ -1330,361 +2164,6 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
 
         # Return failed-execution indication to the calling function:
         return False
-
-
-def find_element(driver, find_type, find_details):
-    """Function to find an element via a web-scraping procedure"""
-    if find_type == "xpath":
-        return driver.find_element(By.XPATH, find_details)
-
-
-def get_confirmed_planets():
-    """Function for getting all needed data pertaining to confirmed planets and store such information in the space database supporting our website"""
-    try:
-        # Execute API request:
-        response = requests.get(URL_CONFIRMED_PLANETS)
-        if response.status_code == 200:
-            # Delete the existing records in the "confirmed_planets" database table and update same with
-            # the up-to-date data (from the JSON):
-            # NOTE:  Scope of data: Solution Type = 'Published Confirmed'
-            if not update_database("update_confirmed_planets", response.json()):
-                exit()
-
-            # Retrieve all existing records in the "confirmed_planets" database table. If the function
-            # called returns an empty directory, end this procedure:
-            confirmed_planets_data = retrieve_from_database("confirmed_planets")
-            if confirmed_planets_data == {}:
-                exit()
-            # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
-            elif confirmed_planets_data == []:
-                exit()
-
-            # Create and format a spreadsheet file (workbook) to contain all confirmed-planet data. If the function called returns an empty directory, end this procedure:
-            if not export_data_to_spreadsheet_standard("confirmed_planets", confirmed_planets_data):
-                exit()
-
-    except Exception as err:
-        print(f"Error (Confirmed Planets): {err}")
-
-
-def get_constellation_data():
-    """Function for getting all needed data pertaining to constellations and store such information in the space database supporting our website"""
-
-    # Obtain a list of constellation using the skyfield.api library:
-    constellations = dict(load_constellation_names())
-
-    # If a constellation list has been obtained:
-    if constellations != {}:
-        try:
-            # Get the nicknames for each constellation identified.  If the function called returns an empty directory, end this procedure:
-            constellations_data = get_constellation_data_nicknames(constellations)
-            if constellations_data == {}:
-                exit()
-                
-            # Get additional details for each constellation identified.  If the function called returns an empty directory, end this procedure:
-            constellations_added_details = get_constellation_data_added_details(constellations)
-            if constellations_added_details == {}:
-                exit()
-
-            # Get additional details for each constellation identified.  If the function called returns an empty directory, end this procedure:
-            constellations_area = get_constellation_data_area(constellations)
-            if constellations_area == {}:
-                exit()
-
-            # Add the additional details (including area) to the main constellation dictionary:
-            for key in constellations_data:
-                constellations_data[key]["area"] = constellations_area[key]["area"]
-                constellations_data[key]["myth_assoc"] = constellations_added_details[key]["myth_assoc"]
-                constellations_data[key]["first_appear"] = constellations_added_details[key]["first_appear"]
-                constellations_data[key]["brightest_star_name"] = constellations_added_details[key]["brightest_star_name"]
-                constellations_data[key]["brightest_star_url"] = constellations_added_details[key]["brightest_star_url"]
-
-            # Delete the existing records in the "constellations" database table and update same with the
-            # contents of the "constellations_data" dictionary.  If the function called returns a failed-execution
-            # indication, end this procedure:
-            if not update_database("update_constellations", constellations_data):
-                exit()
-
-            # Retrieve all existing records in the "constellations" database table. If the function
-            # called returns an empty directory, end this procedure:
-            constellations_data = retrieve_from_database("constellations")
-            if constellations_data == {}:
-                exit()
-
-            # Create and format a spreadsheet file (workbook) to contain all constellation data. If the function called returns an empty directory, end this procedure:
-            if not export_data_to_spreadsheet_standard("constellations", constellations_data):
-                exit()
-
-        except Exception as err:
-            print(f"Error (Constellation Data): {err}")
-
-    else:  # An error has occurred in processing constellation data.
-        print("Error: Data for 'Constellations' cannot be obtained at this time.")
-
-
-def get_constellation_data_added_details(constellations):
-    """Function for getting (via web-scraping) additional details for each constellation identified"""
-    # Define a variable for storing the additional details for each constellation (to be scraped from the constellation map website):
-    constellations_added_details = {}
-
-    # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail). Accordingly, define variables to be used
-    # as part of the workaround to handle this constellation's data differently than the rest:
-    serpens_element_constellation_myth_assoc_text = ""
-    serpens_element_constellation_first_appear_text = ""
-    serpens_element_constellation_brightest_star_text = ""
-    serpens_element_constellation_brightest_star_url = ""
-    
-    try:
-        # Initiate and configure a Selenium object to be used for scraping website for additional constellation details:
-        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_1, 1, 1)
-
-        # Pause program execution to allow for constellation website loading time:
-        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
-
-        # Define special variables to handle the 'Serpens' constellation whose data spans 2 entries (head/tail) on the target website:
-        serpens_index = 0
-        serpens_list = ["Head: ", "Tail: "]
-
-        # Scrape the constellation map website to obtain additional details for each constellation:
-        for i in range(1, len(constellations) + 1 + 1):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website
-            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
-            element_constellation_name = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(i) + ']/td[1]/a')
-            element_constellation_name_unidecoded = unidecode.unidecode(element_constellation_name.get_attribute("text"))
-
-            # Find the element pertaining to the constellation's mythological association:
-            element_constellation_myth_assoc = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(i) + ']/td[2]/div')
-            element_constellation_myth_assoc_text = element_constellation_myth_assoc.get_attribute("innerHTML")
-
-            # Find the element pertaining to the constellation's first appearance:
-            element_constellation_first_appear = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(i) + ']/td[3]/div')
-            element_constellation_first_appear_text = element_constellation_first_appear.get_attribute("innerHTML")
-
-            # Find the element pertaining to the constellation's brightest star.  Capture both text and url:
-            element_constellation_brightest_star = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[3]/div[2]/table/tbody/tr[' + str(i) + ']/td[5]/a')
-            element_constellation_brightest_star_text = element_constellation_brightest_star.get_attribute("text").replace(" ", "").replace("\n", "")
-            element_constellation_brightest_star_url = element_constellation_brightest_star.get_attribute("href")
-
-            # Add the additional details collected above to the "constellation added details" dictionary:
-            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
-                serpens_element_constellation_myth_assoc_text += serpens_list[serpens_index] + element_constellation_myth_assoc_text + " "
-                serpens_element_constellation_first_appear_text += serpens_list[serpens_index] + element_constellation_first_appear_text + " "
-                serpens_element_constellation_brightest_star_text += serpens_list[serpens_index] + element_constellation_brightest_star_text + " "
-                serpens_element_constellation_brightest_star_url += element_constellation_brightest_star_url + " "
-
-                constellations_added_details["Serpens"] = {
-                    "myth_assoc": serpens_element_constellation_myth_assoc_text,
-                    "first_appear": serpens_element_constellation_first_appear_text,
-                    "brightest_star_name": serpens_element_constellation_brightest_star_text,
-                    "brightest_star_url": serpens_element_constellation_brightest_star_url
-                }
-
-                serpens_index += 1
-
-            else:
-                constellations_added_details[element_constellation_name_unidecoded] = {
-                    "myth_assoc": element_constellation_myth_assoc_text,
-                    "first_appear": element_constellation_first_appear_text,
-                    "brightest_star_name": element_constellation_brightest_star_text,
-                    "brightest_star_url": element_constellation_brightest_star_url
-                }
-
-        # Sort the "constellation added details" dictionary in alphabetical order by its key (the constellation's name):
-        constellations_added_details = collections.OrderedDict(sorted(constellations_added_details.items()))
-
-        # Close and delete the Selenium driver object:
-        driver.close()
-        del driver
-
-        # Return the populated "constellations_added_details" dictionary to the calling function:
-        return constellations_added_details
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Constellation Data - Added Details): {err}")
-
-        # Return empty directory as a failed-execution indication to the calling function:
-        return {}
-
-
-def get_constellation_data_area(constellations):
-    """Function for getting (via web-scraping) the area for each constellation identified"""
-    # Define a variable for storing the area for each constellation (to be scraped from the constellation map website):
-    constellations_area = {}
-
-    # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail). Accordingly, define variable to be used
-    # as part of the workaround to handle this constellation's data differently than the rest:
-    serpens_element_constellation_area_text = ""
-
-    try:
-        # Initiate and configure a Selenium object to be used for scraping website for area (page 1):
-        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_2A, 1, 1)
-
-        # Pause program execution to allow for constellation website loading time:
-        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
-
-        # Define special variables to handle the 'Serpens' constellation whose data spans 2 entries (head/tail) on the target website:
-        serpens_index = 0
-        serpens_list = ["Head: ", "Tail: "]
-
-        # Scrape the constellation map website to obtain additional details for each constellation:
-        for i in range(1,51):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website
-
-            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
-            element_constellation_name = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(i) + ']/td[1]/a')
-            element_constellation_name_unidecoded = unidecode.unidecode(element_constellation_name.get_attribute("text"))
-
-            # Find the element pertaining to the constellation's area. Decode it to normalize to ASCII-based characters:
-            element_constellation_area = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(i) + ']/td[2]')
-            element_constellation_area_text = unidecode.unidecode(element_constellation_area.get_attribute("innerHTML")).replace("&nbsp;"," ")
-
-            # Add the area collected above to the "constellation area" dictionary:
-            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
-                serpens_element_constellation_area_text += serpens_list[serpens_index] + element_constellation_area_text + " "
-
-                constellations_area["Serpens"] = {
-                    "area": serpens_element_constellation_area_text
-                }
-
-                serpens_index += 1
-
-            else:
-                constellations_area[element_constellation_name_unidecoded] = {
-                    "area": element_constellation_area_text,
-                }
-
-        # Close and delete the Selenium driver object:
-        driver.close()
-        del driver
-
-        # Initiate and configure a Selenium object to be used for scraping website for area (page 2:
-        driver = setup_selenium_driver(URL_CONSTELLATION_ADD_DETAILS_2B, 1, 1)
-
-        # Pause program execution to allow for constellation website loading time:
-        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
-
-        # Scrape the constellation map website to obtain additional details for each constellation:
-        for i in range(51,len(constellations) + 1 + 2):  # Added 1 because the constellation "Serpens" is rep'd by two separate entries on this website, and added another because website contains an "Unknown constellation" that should not detract from reaching the end of the "constellations_data" dictionary.
-
-            # Find the element pertaining to the constellation's name. Decode it to normalize to ASCII-based characters:
-            element_constellation_name = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(i- 50) + ']/td[1]/a')
-            element_constellation_name_unidecoded = unidecode.unidecode(element_constellation_name.get_attribute("text"))
-
-            # Find the element pertaining to the constellation's area. Decode it to normalize to ASCII-based characters:
-            element_constellation_area = find_element(driver, "xpath", '/html/body/div/div[3]/div[1]/div[1]/div/div[4]/div[2]/table/tbody/tr[' + str(i - 50) + ']/td[2]')
-            element_constellation_area_text = unidecode.unidecode(element_constellation_area.get_attribute("innerHTML")).replace("&nbsp;", " ")
-
-            # Add the area collected above to the "constellation area" dictionary:
-            if "Serpens" in element_constellation_name_unidecoded:  # Constellation "Serpens" is represented via 2 separate entries in the target website (head & tail).
-                serpens_element_constellation_area_text += serpens_list[serpens_index] + element_constellation_area_text + " "
-
-                constellations_area["Serpens"] = {
-                    "area": serpens_element_constellation_area_text
-                }
-
-                serpens_index += 1
-
-            else:
-                constellations_area[element_constellation_name_unidecoded] = {
-                    "area": element_constellation_area_text,
-                }
-
-        # Close and delete the Selenium driver object:
-        driver.close()
-        del driver
-
-        # Sort the "constellation area" dictionary in alphabetical order by its key (the constellation's name):
-        constellations_area = collections.OrderedDict(sorted(constellations_area.items()))
-
-        # Return the populated "constellations_area" dictionary to the calling function:
-        return constellations_area
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Constellation Data - Area): {err}")
-
-        # Return empty directory as a failed-execution indication to the calling function:
-        return {}
-
-
-def get_constellation_data_nicknames(constellations):
-    """Function for getting (via web-scraping) the nickname for each constellation identified"""
-
-    # Define a variable for storing the final (sorted) dictionary of data for each constellation
-    # (for a better-formatted JSON without the "OrderedDict" qualifier):
-    constellations_data = {}
-
-    try:
-        # Initiate and configure a Selenium object to be used for scraping the constellation map website:
-        driver = setup_selenium_driver(URL_CONSTELLATION_MAP_SITE, 1, 1)
-
-        # Pause program execution to allow for constellation website loading time:
-        time.sleep(WEB_LOADING_TIME_ALLOWANCE)
-
-        # Define a variable for storing the nicknames of each constellation (to be scraped from the constellation map website):
-        constellation_nicknames = {}
-
-        # Scrape the constellation map website to obtain the nicknames of each constellation:
-        for i in range(1, len(constellations) + 1):
-            try:
-                # Find the element pertaining to the constellation's name:
-                element_constellation_name = find_element(driver, "xpath", '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(i) + ']/div/article/div[2]/header/h2/a')
-
-            except:  # Some of the constellations may use a different path than tbe above.
-                # Find the element pertaining to the constellation's name:
-                element_constellation_name = find_element(driver, "xpath", '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(i) + ']/div/article/div[2]/header/h3/a')
-
-            # From the scraping performed above, decode the constellation's name to normalize to ASCII-based characters:
-            element_constellation_name_unidecoded = unidecode.unidecode(element_constellation_name.text)
-
-            # Find the element pertaining to the constellation's nickname. Decode it to normalize to ASCII-based characters:
-            element_constellation_nickname = find_element(driver, "xpath", '/html/body/div[3]/section[2]/div/div/div/div[1]/div[' + str(i) + ']/div/article/div[2]/div/p')
-            element_constellation_nickname_unidecoded = unidecode.unidecode(element_constellation_nickname.text)
-
-            # Add the nickname to the "constellation nicknames" dictionary:
-            constellation_nicknames[element_constellation_name_unidecoded] = element_constellation_nickname_unidecoded
-
-        # Sort the "constellation nicknames" dictionary in alphabetical order by its key (the constellation's name):
-        constellation_nicknames = collections.OrderedDict(sorted(constellation_nicknames.items()))
-
-        # Close and delete the Selenium driver object:
-        driver.close()
-        del driver
-
-        # Define a variable for storing the (unsorted) dictionary of data for each constellation:
-        constellations_unsorted = {}
-
-        # For each constellation identified, prepare its dictionary entry:
-        for key in constellations:
-            constellations_unsorted[constellations[key]] = {"abbreviation": key,
-                                                            "nickname": constellation_nicknames[constellations[key]],
-                                                            "url": "https://www.go-astronomy.com/constellations.php?Name=" +
-                                                                   constellations[key].replace(" ", "%20")}
-
-        # Sort the (unsorted) dictionary  in alphabetical order by its key (the constellation's name):
-        constellations_sorted = collections.OrderedDict(sorted(constellations_unsorted.items()))
-
-        # For each constellation identified, prepare its dictionary entry:
-        for key in constellations_sorted:
-            constellations_data[key] = {"abbreviation": constellations_sorted[key]["abbreviation"],
-                                        "nickname": constellations_sorted[key]["nickname"],
-                                        "url": constellations_sorted[key]["url"]}
-
-        # Return the populated "constellations_data" dictionary to the calling function:
-        return constellations_data
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Constellation Data - Nicknames): {err}")
-
-        # Return empty dictionary as a failed-execution indication to the calling function:
-        return {}
-
-
-
-
-
-
-
 
 
 
@@ -1962,211 +2441,10 @@ def prepare_spreadsheet_get_format(workbook, name):
         return workbook.add_format({"bold": 3, "font_name": "Calibri", "font_size": 16})
 
 
-def setup_selenium_driver(url, width, height):
-    """Function for initiating and configuring a Selenium driver object"""
-
-    # Keep Chrome browser open after program finishes:
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("detach", True)
-
-    # Create and configure the Chrome driver (pass above options into the web driver):
-    driver = webdriver.Chrome(options=chrome_options)
-
-    # Access the desired URL.
-    driver.get(url)
-
-    # Set window position and dimensions, with the latter being large enough to display the website's elements needed:
-    driver.set_window_position(0, 0)
-    driver.set_window_size(width, height)
-
-    # Return the Selenium driver object to the calling function:
-    return driver
 
 
 
-def get_mars_photos():
-    """Function to retrieve summary and detailed data pertaining to the photos taken by each rover exploring on Mars"""
-    # Inform user that database will be checked for updates:
-    print("Mars photos: Checking for updates needed...")
-    
-    try:
-        # Prepare a dictionary which summarizes photos available by rover and earth date:
-        photos_available = get_mars_photos_summarize_photos_available({})
-        if photos_available == {}:
-            exit()
 
-        # Obtain respective dictionaries summarizing photos available and the corresponding contents of the
-        # "mars_photo_details" database table. If the function returns an empty directory for the former,
-        # end this procedure:
-        photos_available_summary, photo_details_summary = retrieve_from_database("mars_photo_details_compare_with_photos_available")
-        if photos_available_summary == {}:
-            exit()
-        # If an empty list was returned for "photos available", no records satisfied the query.  Therefore, exit this procedure:
-        elif photos_available_summary == []:
-            exit()
-
-        else:
-            # Initialize a variable for capturing rover/earth date combinations for which there is a mismatch
-            # between the photos available and the corresponding photo details:
-            rover_earth_date_combo_mismatch_between_summaries = []
-
-            # Compare photos available with the corresponding contents of the "mars_photo_details" database table:
-            if photos_available_summary == photo_details_summary:  # Database is up to date.  No API requests are needed.
-                print("Mars photos: Database is up to date. Proceeding to export results to spreadsheet files...")
-
-            else:  # Database (specifically the "mars_photo_details" needs updating.
-                print("Mars photos: Photo details table needs updating.  Update in progress...")
-
-                # Capture a list of the rover/earth date combinations for which there is a mismatch
-                # between the photos available and the corresponding photo details:
-                for i in range(0, len(photos_available_summary)):
-                    if not(photos_available_summary[i] in photo_details_summary):
-                        rover_earth_date_combo_mismatch_between_summaries.append(photos_available_summary[i][0])
-
-            # Perform required database updates based on whether any mismatches were identified above.
-            # If the function called returns a failed-execution indication, end this procedure:
-            if not get_mars_photos_update_database(photos_available, rover_earth_date_combo_mismatch_between_summaries):
-                exit()
-
-        # Retrieve a list of records from the "mars_photos_available" database table.  If the function
-        # called returns a failed-execution indication (i.e., an empty dictionary), end this procedure:
-        photos_available = retrieve_from_database("mars_photos_available")
-        if photos_available == {}:
-            exit()
-        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
-        elif photos_available == []:
-            exit()
-
-        # Retrieve a list of records from the "mars_photo_details database table.  If the function
-        # called returns a failed-execution indication (i.e., an empty dictionary), end this procedure:
-        photo_details = retrieve_from_database("mars_photo_details")
-        if photo_details == {}:
-            exit()
-        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
-        elif photo_details == []:
-            exit()
-
-        # Export collected summary and detailed results to a spreadsheet workbook:
-        if not export_mars_photos_to_spreadsheet(photos_available, photo_details):
-            exit()
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars photos): {err}")
-
-
-def get_mars_photos_summarize_photo_counts_by_rover_and_earth_year():
-    """Function to summarize photo counts by rover and earth year.  This supports final spreadsheet creation"""
-    try:
-        with app.app_context():
-            # Get counts (by rover name and year of earth date) from "mars_photo_details" database table. If the
-            # function called returns a failed-execution indication (i.e., an empty dictionary), end this procedure:
-            photo_counts = retrieve_from_database("mars_photo_details_get_counts_by_rover_and_earth_date")
-            if photo_counts == {}:
-                exit()
-            # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
-            elif photo_counts == []:
-                exit()
-
-            # Initialize list variables needed to produce the final results to the calling function:
-            photo_count_grouping_1 = []
-            photo_count_grouping_2 = []
-
-            # Add a rover name/earth year combo value to the results obtained above, and add all to a list:
-            for item in photo_counts:
-                photo_count_grouping_1.append([item[0], item[1], item[0]+"_"+item[1][:4], item[2]])
-
-            # Iterate through the list created above, summarize photo counts by rover name/earth year combo, and
-            # populate list with summarized data:
-            # Capture the first row of data:
-            rover_name_a = photo_count_grouping_1[0][0]
-            earth_year_a = photo_count_grouping_1[0][1][:4]
-            rover_earth_date_combo_a = photo_count_grouping_1[0][2]
-            total_photos_a = photo_count_grouping_1[0][3]
-
-            # Capture the next row of date.  Compare the rover/earth year combo with the combo from
-            # the previous row.  Iterate through this process until the end of the data set has been
-            # reached:
-            for i in range(1,len(photo_count_grouping_1)):
-                # Capture the next row of data:
-                rover_name_b = photo_count_grouping_1[i][0]
-                earth_year_b = photo_count_grouping_1[i][1][:4]
-                rover_earth_date_combo_b = photo_count_grouping_1[i][2]
-                total_photos_b = photo_count_grouping_1[i][3]
-
-                # Compare the rover/earth year combo with the combo from the previous row:
-                if rover_earth_date_combo_b != rover_earth_date_combo_a:  # New rover/earth year combo has been reached.
-                    # Append the final photo count for the previous row (whose final row has been reached) to the
-                    # final list to be returned to the calling function:
-                    photo_count_grouping_2.append([rover_name_a, earth_year_a, rover_earth_date_combo_a, total_photos_a])
-                    rover_name_a = rover_name_b
-                    earth_year_a = earth_year_b
-                    rover_earth_date_combo_a = rover_earth_date_combo_b
-                    total_photos_a = total_photos_b
-                else:  # New rover/earth year combo has NOT been reached.
-                    # Continue tallying the running total for the current combo.
-                    total_photos_a += total_photos_b
-
-            # Capture the final total photo count for the final rover/earth date combo (whose final row
-            # has been reached), and append it to the final list to be returned to the calling function:
-            photo_count_grouping_2.append([rover_name_a, earth_year_a, rover_earth_date_combo_a, total_photos_a])
-
-            # Return resulting list to the calling function:
-            return photo_count_grouping_2
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars photos - Summarize photo counts by rover and earth year): {err}")
-
-        # Return empty dictionary as a failed-execution indication to the calling function:
-        return []
-
-
-def get_mars_photos_summarize_photos_available(photos_available):
-    try:
-        # Perform the following for each rover that is currently active:
-        for rover_name in mars_rovers:
-            # Execute the API request:
-            url = URL_MARS_ROVER_PHOTOS_BY_ROVER + rover_name + "?api_key=" + API_KEY_MARS_ROVER_PHOTOS
-            response = requests.get(url)
-
-            # If API request was successful, capture desired data elements:
-            if response.status_code == 200:  # API request was successful.
-                i = 0
-                for item in response.json()['photo_manifest']['photos']:
-                    photos_available[rover_name + "_" + str(item["earth_date"])] = {
-                        "sol": item["sol"],
-                        "rover_name": rover_name,
-                        "earth_date": item["earth_date"],
-                        "total_photos": item['total_photos'],
-                        "cameras": ','.join(item["cameras"])
-                    }
-
-                if photos_available == {}:
-                    print(f"No photos are available for Mars rover {rover_name}.")
-                    # return total_photos, {}
-                    return {}
-
-            else:  # API request failed.
-                # Inform the user.  Rover will not be represented in the final output.
-                print(f"No photos are available for Mars rover '{rover_name}'.")
-                # return total_photos, {}
-                return {}
-
-        # Delete the existing records in the "mars_photos_available" database table and update same with the
-        # contents of the "photos_available" dictionary.  If the function called returns a failed-execution
-        # indication, end this procedure:
-        if not update_database("update_mars_photos_available", photos_available):
-            exit()
-
-        # return total_photos, photos_available
-        return photos_available
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars rovers - Summarize photos available): {err}")
-        # return -1, {}
-        return {}
 
 
 def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mismatch_between_summaries):
@@ -2232,77 +2510,10 @@ def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mis
         return False
 
 
-def get_mars_photos_update_from_api(rover_name, earth_date):
-    """Function to retrieve, via an API request, photos available for a particular rover/earth date combination"""
-    try:
-        # Identify the URL which will be used as part of the API request:
-        url = URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA + rover_name + "/photos/?api_key=" + API_KEY_MARS_ROVER_PHOTOS + "&earth_date=" + earth_date
-
-        # Execute the API request.
-        response = requests.get(url)
-        if response.status_code == 200:  # API request was successful.
-            # Return the retrieved JSON to the calling function:
-            return response.json()['photos']
-
-        else:  # API request failed.
-            # Inform the user that the photos cannot be obtained at this time:
-            print(f"Error: Data for 'Mars Rover photos (Rover: '{rover_name}', Earth Date {earth_date}) cannot be obtained at this time.")
-
-            # Return
-            return {}
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars rover - Update from API (Rover: '{rover_name}', Earth Date: {earth_date}): {err}")
-
-        # Return an empty directory as a failed-execution indicator to the calling function:
-        return {}
 
 
 
 
-def update_system_log(activity, exception):
-    # Capture current date/time:
-    current_date_time = datetime.now()
-    current_date_time_file = current_date_time.strftime("%Y-%m-%d")
-
-    with open("log_eye_for_space_" + current_date_time_file + ".txt", "a") as f:
-        f.write(datetime.now().strftime("%Y-%m-%d @ %I:%M %p") + ":\n")
-        if exception == None:
-            f.write(activity + ": Successfully executed." + "\n")
-        else:
-            f.write(activity + ": Execution Failed:" + "\n" + exception)
-
-    f.close()
-
-
-
-
-
-def run_apis():
-    global mars_rovers
-    try:
-        # Retrieve, from the database, a list of all rovers that are currently active for purposes of
-        # data production.  If the function called returns an empty list, end this procedure:
-        mars_rovers = retrieve_from_database("mars_rovers")
-        if mars_rovers == {}:
-            exit()
-        # If an empty list was returned, no records satisfied the query.  Therefore, exit this procedure:
-        elif mars_rovers == []:
-            exit()
-
-        # get_mars_photos()
-        # get_constellation_data()
-        # get_confirmed_planets()
-        # get_approaching_asteroids()
-
-        update_system_log("run_apis", None)
-
-    except:
-        print(f"Error: {traceback.format_exc()}")
-        update_system_log("run_apis", traceback.format_exc())
-
-# run_apis()
 
 
 if __name__ == "__main__":
