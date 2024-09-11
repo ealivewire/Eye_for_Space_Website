@@ -24,9 +24,9 @@
   <h5 style="font-weight:normal">{{ render_form(form_ss) }} </h5>
 
   <footer class="pt-5 my-5 text-body-secondary border-top">
-    <p>Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com/</p>
+    <p>{{ recognition_scope_specific }}</p>
     <p></p>
-    <p>Website template created by the Bootstrap team · © 2024</p>
+    <p>{{ recognition_web_template }}</p>
   </footer>
 </div>
   <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>

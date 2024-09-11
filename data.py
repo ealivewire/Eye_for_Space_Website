@@ -1,4 +1,5 @@
 import os
+import datetime
 from dotenv import load_dotenv
 
 # Load environmental variables from the ".env" file:
@@ -49,6 +50,9 @@ SENDER_PASSWORD_GMAIL = os.getenv("SENDER_PASSWORD_GMAIL") # App password (for t
 SENDER_HOST = os.getenv("SENDER_HOST")
 SENDER_PORT = str(os.getenv("SENDER_PORT"))
 
+# Define constant for web page loading-time allowance (in seconds) for the web-scrapers:
+WEB_LOADING_TIME_ALLOWANCE = 5
+
 # Create a dictionary to store spreadsheet-related attributes by content type:
 spreadsheet_attributes = {
     "approaching_asteroids": {
@@ -80,3 +84,59 @@ spreadsheet_attributes = {
     }
 }
 
+# Create a dictionary to store recognition merit by content type:
+recognition = {
+    "approaching_asteroids":
+        "Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/); API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach",
+    "astronomy_pic_of_day":
+        "Data copyrighted by Laura Rowe (Used with permission); Picture manifestation courtesy of https://apod.nasa.gov",
+    "confirmed_planets":
+        "This research has made use of the NASA Exoplanet Archive. Reference: DOI #10.26133/NEA12",
+    "constellations":
+        f"Data courtesy of: 1) Skyfield, 2) © Dominic Ford 2011–{datetime.datetime.now().year}; Maps: GO ASTRONOMY © {datetime.datetime.now().year}",
+    "mars_photos":
+        "Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com",
+    "photo_details":
+        "Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com",
+    "photos_available":
+        "Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com",
+    "space_news":
+        "Data courtesy of Spaceflight News API (SNAPI), a product by The Space Devs (TSD)",
+    "web_template":
+        f"Website template created by the Bootstrap team · © {datetime.datetime.now().year}",
+    "where_is_iss":
+        f"Data courtesy of Nathan Bergey (@natronics) and © OpenStreetMap contributors, ODbL 1.0; Reverse Geocoding courtesy of Map Maker by My Maps Inc. © Copyright 2008-{datetime.datetime.now().year} All Rights Reserved; Maps: @{datetime.datetime.now().year} Google",
+    "who_is_in_space_now":
+        "Data courtesy of Nathan Bergey (@natronics)"
+}
+
+# Define list variable for storing names of Mars rovers that are currently active for the purpose of data production:
+mars_rovers = []
+
+# Define variable to represent the Flask application object to be used for this website:
+app = None
+
+# Define variable to represent the database supporting this website:
+db = None
+
+# Initialize class variables for database tables:
+ApproachingAsteroids = None
+ConfirmedPlanets = None
+Constellations = None
+MarsPhotoDetails = None
+MarsPhotosAvailable = None
+MarsRoverCameras = None
+MarsRovers = None
+SpaceNews = None
+
+# Initialize class variables for web forms:
+AdminUpdateForm = None
+ContactForm = None
+DisplayApproachingAsteroidsSheetForm = None
+DisplayConfirmedPlanetsSheetForm = None
+DisplayConstellationSheetForm = None
+DisplayMarsPhotosSheetForm = None
+ViewApproachingAsteroidsForm = None
+ViewConfirmedPlanetsForm = None
+ViewConstellationForm = None
+ViewMarsPhotosForm = None

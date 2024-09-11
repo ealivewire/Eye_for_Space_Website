@@ -25,9 +25,9 @@
   <h5 style="font-weight:normal">{{ render_form(form_ss) }} </h5>
 
   <footer class="pt-5 my-5 text-body-secondary border-top">
-    <p>Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/);<br>API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach</p>
+    <p>{{ recognition_scope_specific }}</p>
     <p></p>
-    <p>Website template created by the Bootstrap team · © 2024</p>
+    <p>{{ recognition_web_template }}</p>
   </footer>
 </div>
   <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>

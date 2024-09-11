@@ -1,242 +1,49 @@
-# PROFESSIONAL PROJECT: Space Fan Website
+# PROFESSIONAL PROJECT: Eye for Space Website
 
 # OBJECTIVE: To implement a website offering users a way to get information on various points of interest pertaining to space.
-# - Utilizes various technologies including Python, HTTP/REST APIs, web scraping, and database support.
 
 # Import necessary library(ies):
 import requests
-from skyfield.api import load_constellation_names, position_of_radec, load_constellation_map
+from data import app, db, mars_rovers, recognition, spreadsheet_attributes, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CONFIRMED_PLANETS, URL_SPACE_NEWS, URL_PEOPLE_IN_SPACE_NOW, URL_ISS_LOCATION, URL_CONSTELLATION_MAP_SITE, URL_CONSTELLATION_ADD_DETAILS_1, URL_CONSTELLATION_ADD_DETAILS_2A, URL_CONSTELLATION_ADD_DETAILS_2B, URL_MARS_ROVER_PHOTOS_BY_ROVER, URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA, URL_ASTRONOMY_PIC_OF_THE_DAY, URL_GET_LOC_FROM_LAT_AND_LON, API_KEY_CLOSEST_APPROACH_ASTEROIDS, API_KEY_GET_LOC_FROM_LAT_AND_LON, API_KEY_MARS_ROVER_PHOTOS, API_KEY_ASTRONOMY_PIC_OF_THE_DAY, SENDER_EMAIL_GMAIL, SENDER_PASSWORD_GMAIL, SENDER_PORT, SENDER_HOST, WEB_LOADING_TIME_ALLOWANCE
+from data import ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews
+from data import AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, request
 from flask_bootstrap import Bootstrap5
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
-from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField
-from wtforms.validators import InputRequired, Length, Email
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Integer, String, Boolean, Float, DateTime, func, distinct
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-import time
-import unidecode
+from skyfield.api import load_constellation_names
+from sqlalchemy import Integer, String, Boolean, Float, DateTime, func, distinct
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField
+from wtforms.validators import InputRequired, Length, Email
 import collections  # Used for sorting items in the constellations dictionary
-import xlsxwriter
-from datetime import datetime, timedelta
-import math
-from dotenv import load_dotenv
-import os
-import glob
-from data import spreadsheet_attributes, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CONFIRMED_PLANETS, URL_SPACE_NEWS, URL_PEOPLE_IN_SPACE_NOW, URL_ISS_LOCATION, URL_CONSTELLATION_MAP_SITE, URL_CONSTELLATION_ADD_DETAILS_1, URL_CONSTELLATION_ADD_DETAILS_2A, URL_CONSTELLATION_ADD_DETAILS_2B, URL_MARS_ROVER_PHOTOS_BY_ROVER, URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA, URL_ASTRONOMY_PIC_OF_THE_DAY, URL_GET_LOC_FROM_LAT_AND_LON, API_KEY_CLOSEST_APPROACH_ASTEROIDS, API_KEY_GET_LOC_FROM_LAT_AND_LON, API_KEY_MARS_ROVER_PHOTOS, API_KEY_ASTRONOMY_PIC_OF_THE_DAY, SENDER_EMAIL_GMAIL, SENDER_PASSWORD_GMAIL, SENDER_PORT, SENDER_HOST
-import traceback
 import email_validator
+import glob
+import math
+import os
 import smtplib
+import time
+import traceback
+import unidecode
 import wx
 import wx.lib.agw.pybusyinfo as PBI
+import xlsxwriter
 
-# from tkinter import messagebox
+# Define variable to be used for showing user dialog and message boxes:
+dlg = wx.App()
 
-# Load environmental variables from the ".env" file:
-load_dotenv()
-
-#*** BE SURE TO CREDIT SOURCES FOR ALL DATA AVAILABLE BELOW***
-# - For People In Space Now: "Data courtesy of Nathan Bergey (@natronics)"
-# - For ISS location: "Data courtesy of Nathan Bergey (@natronics) and © OpenStreetMap contributors, ODbL 1.0; Reverse Geocoding courtesy of Map Maker by My Maps Inc. © Copyright 2008-2024 All Rights Reserved; Maps: @2024 Google"
-# - For Mars rover data: "Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com/"
-# - For Astronomy pic of the day: "Data copyrighted by Laura Rowe (Used with permission); Picture manifestation courtesy of https://apod.nasa.gov"
-# - For Confirmed Planets: "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program. Reference: DOI #10.26133/NEA12"
-# - For Constellations: "Data courtesy of: 1) Skyfield, 2) © Dominic Ford 2011–2024.; Maps: GO ASTRONOMY © 2024"
-# - For Space News: "Data courtesy of Spaceflight News API (SNAPI), a product by The Space Devs (TSD)"
-# - For Closest Approach Asteroids: "Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/); API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach"
-
-# Define constant for web page loading-time allowance (in seconds) for the web-scrapers:
-WEB_LOADING_TIME_ALLOWANCE = 10
-
-# Initialize the Flask app. object
+# Initialize the Flask app. object:
 app = Flask(__name__)
-
 
 # Create needed class "Base":
 class Base(DeclarativeBase):
   pass
 
-
-# Configure the SQLite database, relative to the app instance folder:
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///space.db"
-
-# Initialize an instance of Bootstrap5, using the "app" object defined above as a parameter:
-Bootstrap5(app)
-
-# Retrieve the secret key to be used for CSRF protection:
-app.secret_key = os.getenv("SECRET_KEY_FOR_CSRF_PROTECTION")
-
-# Create the db object using the SQLAlchemy constructor:
-db = SQLAlchemy(model_class=Base)
-
-# Initialize the app with the extension:
-db.init_app(app)
-
-# Define list variable for storing names of Mars rovers that are currently active for the purpose of data production:
-mars_rovers = []
-
-
-# CONFIGURE DATABASE TABLES (LISTED IN ALPHABETICAL ORDER):
-class ApproachingAsteroids(db.Model):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
-    absolute_magnitude_h: Mapped[float] = mapped_column(Float, nullable=False)
-    estimated_diameter_km_min: Mapped[float] = mapped_column(Float, nullable=False)
-    estimated_diameter_km_max: Mapped[float] = mapped_column(Float, nullable=False)
-    is_potentially_hazardous: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    close_approach_date: Mapped[str] = mapped_column(String(10), nullable=False)
-    relative_velocity_km_per_s: Mapped[float] = mapped_column(Float, nullable=False)
-    miss_distance_km: Mapped[float] = mapped_column(Float, nullable=False)
-    orbiting_body: Mapped[str] = mapped_column(String(20), nullable=False)
-    is_sentry_object: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-
-
-class ConfirmedPlanets(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    host_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    host_num_stars: Mapped[int] = mapped_column(Integer, nullable=False)
-    host_num_planets: Mapped[int] = mapped_column(Integer, nullable=False)
-    planet_name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    discovery_year: Mapped[int] = mapped_column(Integer, nullable=False)
-    discovery_method: Mapped[str] = mapped_column(String(50), nullable=False)
-    discovery_facility: Mapped[str] = mapped_column(String(100), nullable=False)
-    discovery_telescope: Mapped[str] = mapped_column(String(50), nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-
-
-class Constellations(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[int] = mapped_column(String(20), unique=True, nullable=False)
-    abbreviation: Mapped[str] = mapped_column(String(10), unique=False, nullable=False)
-    nickname: Mapped[str] = mapped_column(String(30), unique=False, nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-    area: Mapped[str] = mapped_column(String(50), unique=False, nullable=False)
-    myth_assoc: Mapped[str] = mapped_column(String(500), unique=False, nullable=False)
-    first_appear: Mapped[str] = mapped_column(String(50), unique=False, nullable=False)
-    brightest_star_name: Mapped[str] = mapped_column(String(40), unique=False, nullable=False)
-    brightest_star_url: Mapped[str] = mapped_column(String(40), unique=False, nullable=False)
-
-
-class MarsPhotoDetails(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rover_earth_date_combo = mapped_column(String(32), nullable=False)
-    rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
-    sol: Mapped[str] = mapped_column(String(15), unique=False, nullable=False)
-    pic_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    earth_date: Mapped[str] = mapped_column(String(15), nullable=False)
-    camera_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    camera_full_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-
-
-class MarsPhotosAvailable(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rover_earth_date_combo = mapped_column(String(32), nullable=False)
-    rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
-    sol: Mapped[str] = mapped_column(String(15), unique=False, nullable=False)
-    earth_date: Mapped[str] = mapped_column(String(15), nullable=False)
-    cameras: Mapped[str] = mapped_column(String(250), nullable=False)
-    total_photos: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
-class MarsRoverCameras(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
-    camera_name: Mapped[str] = mapped_column(String(20), nullable=False)
-    camera_full_name: Mapped[str] = mapped_column(String(50), nullable=False)
-
-
-class MarsRovers(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class SpaceNews(db.Model):
-    row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    article_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    news_site: Mapped[str] = mapped_column(String(30), nullable=False)
-    title: Mapped[str] = mapped_column(String(250), nullable=False)
-    summary: Mapped[str] = mapped_column(String(500), nullable=False)
-    date_time_published: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    date_time_updated: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    url: Mapped[str] = mapped_column(String(500), nullable=False)
-
-
-# CONFIGURE FORMS FOR USE IN HTML FILES (LISTED IN ALPHABETICAL ORDER):
-# *********************************************************************
-# Configure "admin_update" form:
-class AdminUpdateForm(FlaskForm):
-    chk_approaching_asteroids = BooleanField(label="Approaching Asteroids", default=True)
-    chk_confirmed_planets = BooleanField(label="Confirmed Planets", default=True)
-    chk_constellations = BooleanField(label="Constellations", default=True)
-    chk_mars_photos = BooleanField(label="Photos from Mars", default=True)
-    button_submit = SubmitField(label="Begin Update")
-
-
-# Configure 'contact us' form:
-class ContactForm(FlaskForm):
-    txt_name = StringField(label="Your Name:", validators=[InputRequired(), Length(max=50)])
-    txt_email = EmailField(label="Your E-mail Address:", validators=[InputRequired(), Email()])
-    txt_message = TextAreaField(label="Your Message:", validators=[InputRequired()])
-    button_submit = SubmitField(label="Send Message")
-
-
-# Configure form for viewing "approaching asteroids" spreadsheet:
-class DisplayApproachingAsteroidsSheetForm(FlaskForm):
-    list_approaching_asteroids_sheet_name = SelectField("Approaching Asteroids Sheet:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Approaching Asteroids Spreadsheet")
-
-
-# Configure form for viewing "confirmed planets" spreadsheet:
-class DisplayConfirmedPlanetsSheetForm(FlaskForm):
-    list_confirmed_planets_sheet_name = SelectField("Confirmed Planets Sheet:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Confirmed Planets Spreadsheet")
-
-
-# Configure form for viewing "constellations" spreadsheet:
-class DisplayConstellationSheetForm(FlaskForm):
-    list_constellation_sheet_name = SelectField("Constellation Sheet:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Constellations Spreadsheet")
-
-
-# Configure form for viewing "Mars photos" spreadsheet (summary or detailed):
-class DisplayMarsPhotosSheetForm(FlaskForm):
-    list_mars_photos_sheet_name = SelectField("Mars Photos Sheet:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Mars Photos Spreadsheet")
-
-
-# Configure form for viewing "approaching asteroids" data online (on dedicated web page):
-class ViewApproachingAsteroidsForm(FlaskForm):
-    list_close_approach_date = SelectField("Select Close Approach Date:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Details")
-
-
-# Configure form for viewing "confirmed planets" data online (on dedicated web page):
-class ViewConfirmedPlanetsForm(FlaskForm):
-    list_discovery_year = SelectField("Select Discovery Year:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View List of Confirmed Planets")
-
-
-# Configure form for viewing "constellations" data online (on dedicated web page):
-class ViewConstellationForm(FlaskForm):
-    list_constellation_name = SelectField("Select Constellation Name:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View Details")
-
-
-# Configure form for viewing "Mars photos" data online (on dedicated web page):
-class ViewMarsPhotosForm(FlaskForm):
-    list_rover_earth_date_combo = SelectField("Select Rover Name / Earth Date Combination:", choices=[], validate_choice=False)
-    button_submit = SubmitField(label="View List of Photos")
-
-
-# If needed tables do not already exist in the DB, create them:
-with app.app_context():
-    db.create_all()
-
+# NOTE: Additional configurations are launched via the "run_app" function defined below.
 
 # CONFIGURE ROUTES FOR WEB PAGES (LISTED IN HIERARCHICAL ORDER STARTING WITH HOME PAGE, THEN ALPHABETICALLY):
 # ***********************************************************************************************************
@@ -247,11 +54,11 @@ def home():
 
     try:
         # Go to the home page:
-        return render_template("index.html")
+        return render_template("index.html", recognition_web_template=recognition["web_template"])
     except:
         dlg = wx.MessageBox(f"Error (route: '/'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/'", traceback.format_exc())
-
+        dlg = None
 
 # Configure route for "About" web page:
 @app.route('/about')
@@ -260,11 +67,11 @@ def about():
 
     try:
         # Go to the "About" page:
-        return render_template("about.html")
+        return render_template("about.html", recognition_web_template=recognition["web_template"])
     except:
         dlg = wx.MessageBox(f"Error (route: '/about'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/about'", traceback.format_exc())
-
+        dlg = None
 
 # Configure route for "Administrative Update" web page:
 @app.route('/admin_update',methods=["GET", "POST"])
@@ -319,38 +126,50 @@ def admin_update():
 
             if form.chk_mars_photos.data:
                 dlg = PBI.PyBusyInfo("Photos from Mars: Update in progress...", title="Administrative Update")
-                update_status_mars_photos = "TEST"
+                error_msg_mars_photos, success_mars_photos = get_mars_photos()
                 dlg = None
+                if success_mars_photos:
+                    update_status_mars_photos = "Photos from Mars: Successfully updated."
+                else:
+                    update_status_mars_photos = f"Photos from Mars: Update failed ({error_msg_mars_photos})."
 
             # Prepare final status-update text to pass to the "Administrative Update" page:
             update_status = ""
-            if update_status_approaching_asteroids != "":
-                update_status += update_status_approaching_asteroids + "\n"
-            if update_status_confirmed_planets != "":
-                update_status += update_status_confirmed_planets + "\n"
-            if update_status_constellations != "":
-                update_status += update_status_constellations + "\n"
-            if update_status_mars_photos != "":
-                update_status += update_status_mars_photos + "\n"
 
-            # Destroy dialog app:
-            app_wx.MainLoop()
+            # Check if the user has selected at least one of the items to update.  If not, prompt user to select one:
+            if not (update_status_approaching_asteroids != "" or update_status_confirmed_planets != "" or update_status_constellations != "" or update_status_mars_photos != ""):
+                dlg = wx.MessageBox(f"Please select at least one of the items to update.", 'Administrative Update', wx.OK | wx.ICON_INFORMATION)
+                dlg = None
 
-            # Go to the "Administrative Update" page and display the results of update execution:
-            return render_template("admin_update.html", update_status=update_status)
+            else:  # User has selected at least one item to update.  Perform selected update(s):
+                if update_status_approaching_asteroids != "":
+                    update_status += update_status_approaching_asteroids + "\n"
+                if update_status_confirmed_planets != "":
+                    update_status += update_status_confirmed_planets + "\n"
+                if update_status_constellations != "":
+                    update_status += update_status_constellations + "\n"
+                if update_status_mars_photos != "":
+                    update_status += update_status_mars_photos + "\n"
+
+                # Destroy dialog app:
+                app_wx.MainLoop()
+
+                # Go to the "Administrative Update" page and display the results of update execution:
+                return render_template("admin_update.html", update_status=update_status, recognition_web_template=recognition["web_template"])
 
         # Go to the "Administrative Update" page:
-        return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>")
+        return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/admin_update'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/admin_update'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Approaching Asteroids" web page:
 @app.route('/approaching_asteroids',methods=["GET", "POST"])
 def approaching_asteroids():
-    global db, app
+    global db, app, ViewApproachingAsteroidsForm, DisplayApproachingAsteroidsSheetForm
 
     try:
         # Instantiate an instance of the "ViewApproachingAsteroidsForm" class:
@@ -382,19 +201,19 @@ def approaching_asteroids():
                     error_msg = "No matching records were retrieved."
 
                 # Show web page with retrieved approaching-asteroid details:
-                return render_template('show_approaching_asteroids_details.html', approaching_asteroids_details=approaching_asteroids_details, close_approach_date=form.list_close_approach_date.data, error_msg=error_msg)
+                return render_template('show_approaching_asteroids_details.html', approaching_asteroids_details=approaching_asteroids_details, close_approach_date=form.list_close_approach_date.data, error_msg=error_msg, recognition_scope_specific=recognition["approaching_asteroids"], recognition_web_template=recognition["web_template"])
 
             else:
                 # Open the selected spreadsheet file:
                 os.startfile(str(form_ss.list_approaching_asteroids_sheet_name.data))
 
         # Go to the web page to render the results:
-        return render_template('approaching_asteroids.html', form=form, form_ss=form_ss)
+        return render_template('approaching_asteroids.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["approaching_asteroids"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
-
+        dlg = None
 
 # Configure route for "Astronomy Pic of the Day" web page:
 @app.route('/astronomy_pic_of_day')
@@ -406,11 +225,12 @@ def astronomy_pic_of_day():
         json, copyright_details, error_msg = get_astronomy_pic_of_the_day()
 
         # Go to the web page to render the results:
-        return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg)
+        return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg, recognition_scope_specific=recognition["astronomy_pic_of_day"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/astronomy_pic_of_day'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Confirmed Planets" web page:
@@ -448,18 +268,19 @@ def confirmed_planets():
                     error_msg = "No matching records were retrieved."
 
                 # Show web page with retrieved confirmed-planet details:
-                return render_template('show_confirmed_planets_details.html', confirmed_planets_details=confirmed_planets_details, disc_year=form.list_discovery_year.data, error_msg=error_msg)
+                return render_template('show_confirmed_planets_details.html', confirmed_planets_details=confirmed_planets_details, disc_year=form.list_discovery_year.data, error_msg=error_msg, recognition_scope_specific=recognition["confirmed_planets"], recognition_web_template=recognition["web_template"])
 
             else:
                 # Open the selected spreadsheet file:
                 os.startfile(str(form_ss.list_confirmed_planets_sheet_name.data))
 
         # Go to the web page to render the results:
-        return render_template('confirmed_planets.html', form=form, form_ss=form_ss)
+        return render_template('confirmed_planets.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["confirmed_planets"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/confirmed_planets'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Constellations" web page:
@@ -491,18 +312,19 @@ def constellations():
                 constellation_details = db.session.execute(db.select(Constellations).where(Constellations.name == selected_constellation_name)).scalar()
 
                 # Show web page with retrieved constellation details:
-                return render_template('show_constellation_details.html', constellation_details=constellation_details)
+                return render_template('show_constellation_details.html', constellation_details=constellation_details, recognition_scope_specific=recognition["constellations"], recognition_web_template=recognition["web_template"])
 
             else:
                 # Open the selected spreadsheet file:
                 os.startfile(str(form_ss.list_constellation_sheet_name.data))
 
         # Go to the web page to render the results:
-        return render_template('constellations.html', form=form, form_ss=form_ss)
+        return render_template('constellations.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["constellations"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/constellations'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/constellations'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Contact Us" web page:
@@ -520,14 +342,15 @@ def contact():
             msg_status = email_from_contact_page(form)
 
             # Go to the "Contact Us" page and display the results of e-mail execution attempt:
-            return render_template("contact.html", msg_status=msg_status)
+            return render_template("contact.html", msg_status=msg_status, recognition_web_template=recognition["web_template"])
 
         # Go to the "Contact Us" page:
-        return render_template("contact.html", form=form, msg_status="<<Message Being Drafted.>>")
+        return render_template("contact.html", form=form, msg_status="<<Message Being Drafted.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/contact'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/contact'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Photos from Mars" web page:
@@ -565,18 +388,19 @@ def mars_photos():
                     error_msg = "No matching records were retrieved."
 
                 # Show web page with retrieved photo details:
-                return render_template('show_mars_photos_details.html', mars_photos_details=mars_photos_details, rover_earth_date_combo=form.list_rover_earth_date_combo.data, error_msg=error_msg)
+                return render_template('show_mars_photos_details.html', mars_photos_details=mars_photos_details, rover_earth_date_combo=form.list_rover_earth_date_combo.data, error_msg=error_msg, recognition_scope_specific=recognition["mars_photos"], recognition_web_template=recognition["web_template"])
 
             else:
                 # Open the selected spreadsheet file:
                 os.startfile(str(form_ss.list_mars_photos_sheet_name.data))
 
         # Go to the web page to render the results:
-        return render_template('mars_photos.html', form=form, form_ss=form_ss)
+        return render_template('mars_photos.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["mars_photos"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/mars_photos'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/mars_photos'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Space News" web page:
@@ -600,11 +424,12 @@ def space_news():
             articles = None
 
         # Go to the web page to render the results:
-        return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg)
+        return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg, recognition_scope_specific=recognition["space_news"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/space_news'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/space_news'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Where is ISS" web page:
@@ -617,11 +442,12 @@ def where_is_iss():
         location_address, location_url = get_iss_location()
 
         # Go to the web page to render the results:
-        return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""))
+        return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""), recognition_scope_specific=recognition["where_is_iss"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/where_is_iss'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/where_is_iss'", traceback.format_exc())
+        dlg = None
 
 
 # Configure route for "Who is in Space Now" web page:
@@ -634,11 +460,12 @@ def who_is_in_space_now():
         json, has_json = get_people_in_space_now()
 
         # Go to the web page to render the results:
-        return render_template("who_is_in_space_now.html", json=json, has_json=has_json)
+        return render_template("who_is_in_space_now.html", json=json, has_json=has_json, recognition_scope_specific=recognition["who_is_in_space_now"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/who_is_in_space_now'", traceback.format_exc())
+        dlg = None
 
 
 # DEFINE FUNCTIONS TO BE USED FOR THIS APPLICATION (LISTED IN ALPHABETICAL ORDER BY FUNCTION NAME):
@@ -651,20 +478,208 @@ def close_workbook(workbook):
                 # Close the workbook.
                 workbook.close()
 
+                # Return successful-execution indication to the calling function:
+                return True
+
             except xlsxwriter.exceptions.FileCreateError as e:
                 # Inform user that exception has occurred and prompt for confirmation
-                # to re-attempt closure of workbook:
-                user_answer = input("Exception caught in workbook.close(): %s\n"
-                                    "Please close the file if it is open in Excel.\n"
-                                    "Try to write file again? (y/n|): " % e
-                                    )
-                if user_answer.lower() != "n":  # User has elected to not re-attempt closure.
+                # to re-attempt file creation/closure:
+                user_answer = wx.MessageBox(f"Spreadsheet file '{workbook.filename}' could not be created.\nPlease close the file if it is open in Excel.\nWould you like to try to write the file again?", 'Administrative Update', wx.YES_NO | wx.ICON_QUESTION)
+
+                if user_answer == 2:  # User wishes to re-attempt file creation/closure:
+                    user_answer = None
                     continue
+                else:  # User has elected to not re-attempt file creation/closure.
+                    user_answer = None
+                    # Return failed-execution indication to the calling function.
+                    return False
+
+            # Break from the "while" loop:
             break
 
     except:  # An error has occurred.
-        print(f"Error (close_workbook): {traceback.format_exc()}")
         update_system_log("close_workbook", traceback.format_exc())
+
+
+def config_database():
+    """Function for configuring the database tables supporting this website"""
+    global db, app, ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews
+
+    try:
+        # Create the database object using the SQLAlchemy constructor:
+        db = SQLAlchemy(model_class=Base)
+
+        # Initialize the app with the extension:
+        db.init_app(app)
+
+        # Configure database tables (listed in alphabetical order; class names are sufficiently descriptive):
+        class ApproachingAsteroids(db.Model):
+            id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            name: Mapped[str] = mapped_column(String(50), nullable=False)
+            absolute_magnitude_h: Mapped[float] = mapped_column(Float, nullable=False)
+            estimated_diameter_km_min: Mapped[float] = mapped_column(Float, nullable=False)
+            estimated_diameter_km_max: Mapped[float] = mapped_column(Float, nullable=False)
+            is_potentially_hazardous: Mapped[bool] = mapped_column(Boolean, nullable=False)
+            close_approach_date: Mapped[str] = mapped_column(String(10), nullable=False)
+            relative_velocity_km_per_s: Mapped[float] = mapped_column(Float, nullable=False)
+            miss_distance_km: Mapped[float] = mapped_column(Float, nullable=False)
+            orbiting_body: Mapped[str] = mapped_column(String(20), nullable=False)
+            is_sentry_object: Mapped[bool] = mapped_column(Boolean, nullable=False)
+            url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+        class ConfirmedPlanets(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            host_name: Mapped[str] = mapped_column(String(50), nullable=False)
+            host_num_stars: Mapped[int] = mapped_column(Integer, nullable=False)
+            host_num_planets: Mapped[int] = mapped_column(Integer, nullable=False)
+            planet_name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+            discovery_year: Mapped[int] = mapped_column(Integer, nullable=False)
+            discovery_method: Mapped[str] = mapped_column(String(50), nullable=False)
+            discovery_facility: Mapped[str] = mapped_column(String(100), nullable=False)
+            discovery_telescope: Mapped[str] = mapped_column(String(50), nullable=False)
+            url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+        class Constellations(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            name: Mapped[int] = mapped_column(String(20), unique=True, nullable=False)
+            abbreviation: Mapped[str] = mapped_column(String(10), unique=False, nullable=False)
+            nickname: Mapped[str] = mapped_column(String(30), unique=False, nullable=False)
+            url: Mapped[str] = mapped_column(String(500), nullable=False)
+            area: Mapped[str] = mapped_column(String(50), unique=False, nullable=False)
+            myth_assoc: Mapped[str] = mapped_column(String(500), unique=False, nullable=False)
+            first_appear: Mapped[str] = mapped_column(String(50), unique=False, nullable=False)
+            brightest_star_name: Mapped[str] = mapped_column(String(40), unique=False, nullable=False)
+            brightest_star_url: Mapped[str] = mapped_column(String(40), unique=False, nullable=False)
+
+        class MarsPhotoDetails(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            rover_earth_date_combo = mapped_column(String(32), nullable=False)
+            rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
+            sol: Mapped[str] = mapped_column(String(15), unique=False, nullable=False)
+            pic_id: Mapped[int] = mapped_column(Integer, nullable=False)
+            earth_date: Mapped[str] = mapped_column(String(15), nullable=False)
+            camera_name: Mapped[str] = mapped_column(String(20), nullable=False)
+            camera_full_name: Mapped[str] = mapped_column(String(50), nullable=False)
+            url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+        class MarsPhotosAvailable(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            rover_earth_date_combo = mapped_column(String(32), nullable=False)
+            rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
+            sol: Mapped[str] = mapped_column(String(15), unique=False, nullable=False)
+            earth_date: Mapped[str] = mapped_column(String(15), nullable=False)
+            cameras: Mapped[str] = mapped_column(String(250), nullable=False)
+            total_photos: Mapped[int] = mapped_column(Integer, nullable=False)
+
+        class MarsRoverCameras(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
+            camera_name: Mapped[str] = mapped_column(String(20), nullable=False)
+            camera_full_name: Mapped[str] = mapped_column(String(50), nullable=False)
+
+        class MarsRovers(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            rover_name: Mapped[str] = mapped_column(String(15), nullable=False)
+            active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+        class SpaceNews(db.Model):
+            row_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            article_id: Mapped[int] = mapped_column(Integer, nullable=False)
+            news_site: Mapped[str] = mapped_column(String(30), nullable=False)
+            title: Mapped[str] = mapped_column(String(250), nullable=False)
+            summary: Mapped[str] = mapped_column(String(500), nullable=False)
+            date_time_published: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+            date_time_updated: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+            url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+        # Configure the database per the above.  If needed tables do not already exist in the DB, create them:
+        with app.app_context():
+            db.create_all()
+
+        # At this point, function is presumed to have executed successfully.  Return\
+        # successful-execution indication to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("config_database", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
+
+
+def config_web_forms():
+    """Function for configuring the web forms supporting this website"""
+    global AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
+
+    try:
+        # CONFIGURE WEB FORMS (LISTED IN ALPHABETICAL ORDER):
+        # Configure "admin_update" form:
+        class AdminUpdateForm(FlaskForm):
+            chk_approaching_asteroids = BooleanField(label="Approaching Asteroids", default=True)
+            chk_confirmed_planets = BooleanField(label="Confirmed Planets", default=True)
+            chk_constellations = BooleanField(label="Constellations", default=True)
+            chk_mars_photos = BooleanField(label="Photos from Mars", default=True)
+            button_submit = SubmitField(label="Begin Update")
+
+        # Configure 'contact us' form:
+        class ContactForm(FlaskForm):
+            txt_name = StringField(label="Your Name:", validators=[InputRequired(), Length(max=50)])
+            txt_email = EmailField(label="Your E-mail Address:", validators=[InputRequired(), Email()])
+            txt_message = TextAreaField(label="Your Message:", validators=[InputRequired()])
+            button_submit = SubmitField(label="Send Message")
+
+        # Configure form for viewing "approaching asteroids" spreadsheet:
+        class DisplayApproachingAsteroidsSheetForm(FlaskForm):
+            list_approaching_asteroids_sheet_name = SelectField("Approaching Asteroids Sheet:", choices=[],
+                                                                validate_choice=False)
+            button_submit = SubmitField(label="View Approaching Asteroids Spreadsheet")
+
+        # Configure form for viewing "confirmed planets" spreadsheet:
+        class DisplayConfirmedPlanetsSheetForm(FlaskForm):
+            list_confirmed_planets_sheet_name = SelectField("Confirmed Planets Sheet:", choices=[],
+                                                            validate_choice=False)
+            button_submit = SubmitField(label="View Confirmed Planets Spreadsheet")
+
+        # Configure form for viewing "constellations" spreadsheet:
+        class DisplayConstellationSheetForm(FlaskForm):
+            list_constellation_sheet_name = SelectField("Constellation Sheet:", choices=[], validate_choice=False)
+            button_submit = SubmitField(label="View Constellations Spreadsheet")
+
+        # Configure form for viewing "Mars photos" spreadsheet (summary or detailed):
+        class DisplayMarsPhotosSheetForm(FlaskForm):
+            list_mars_photos_sheet_name = SelectField("Mars Photos Sheet:", choices=[], validate_choice=False)
+            button_submit = SubmitField(label="View Mars Photos Spreadsheet")
+
+        # Configure form for viewing "approaching asteroids" data online (on dedicated web page):
+        class ViewApproachingAsteroidsForm(FlaskForm):
+            list_close_approach_date = SelectField("Select Close Approach Date:", choices=[], validate_choice=False)
+            button_submit = SubmitField(label="View Details")
+
+        # Configure form for viewing "confirmed planets" data online (on dedicated web page):
+        class ViewConfirmedPlanetsForm(FlaskForm):
+            list_discovery_year = SelectField("Select Discovery Year:", choices=[], validate_choice=False)
+            button_submit = SubmitField(label="View List of Confirmed Planets")
+
+        # Configure form for viewing "constellations" data online (on dedicated web page):
+        class ViewConstellationForm(FlaskForm):
+            list_constellation_name = SelectField("Select Constellation Name:", choices=[], validate_choice=False)
+            button_submit = SubmitField(label="View Details")
+
+        # Configure form for viewing "Mars photos" data online (on dedicated web page):
+        class ViewMarsPhotosForm(FlaskForm):
+            list_rover_earth_date_combo = SelectField("Select Rover Name / Earth Date Combination:", choices=[],
+                                                      validate_choice=False)
+            button_submit = SubmitField(label="View List of Photos")
+
+        # At this point, function is presumed to have executed successfully.  Return\
+        # successful-execution indication to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("config_web_forms", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
 
 
 def create_workbook(workbook_name):
@@ -674,7 +689,6 @@ def create_workbook(workbook_name):
         return xlsxwriter.Workbook(workbook_name)
 
     except:  # An error has occurred.
-        print(f"Error (create_workbook): {traceback.format_exc()}")
         update_system_log("create_workbook", traceback.format_exc())
 
         # Return failed-execution indication to the calling function:
@@ -688,11 +702,77 @@ def create_worksheet(workbook, worksheet_name):
         return workbook.add_worksheet(worksheet_name)
 
     except:  # An error has occurred.
-        print(f"Error (create_worksheet): {traceback.format_exc()}")
         update_system_log("create_worksheet", traceback.format_exc())
 
         # Return failed-execution indication to the calling function:
         return None
+
+
+def delete_mars_photos_workbooks():
+    """Function for deleting all spreadsheet workbooks in the application directory which pertain to Mars photos"""
+    try:
+        # Delete the summary workbook:
+        while True:
+            try:
+                # Delete the summary workbook:
+                os.remove("Mars Photos - Summary.xlsx")
+
+            except FileNotFoundError:
+                pass
+
+            except PermissionError:
+                # Inform user that exception has occurred and prompt for confirmation
+                # to re-attempt file deletion:
+                user_answer = wx.MessageBox(f"File 'Mars Photos - Summary.xlsx' could not be deleted prior to the upcoming update.\nPlease close the file if open in Excel.\nWould you like to try to delete the file again?", 'Administrative Update', wx.YES_NO | wx.ICON_QUESTION)
+
+                if user_answer == 2:  # User wishes to re-attempt file deletion:
+                    user_answer = None
+                    continue
+                else:  # User has elected to not re-attempt file deletion.
+                    user_answer = None
+                    # Return failed-execution indication to the calling function.
+                    return False
+
+            # Break from the "while" loop:
+            break
+
+        # Delete the details workbooks:
+        while True:
+            try:
+                # Delete the details workbooks:
+                for f in glob.glob("Mars Photos - Details - *.xlsx"):
+                    os.remove(f)
+
+            except FileNotFoundError:
+                pass
+
+            except PermissionError:
+                # Inform user that exception has occurred and prompt for confirmation
+                # to re-attempt file deletion:
+                user_answer = wx.MessageBox(
+                    f"One or more Mars photo details workbooks could not be deleted prior to the upcoming update.\nPlease close the file(s) if open in Excel.\nWould you like to try to delete the file(s) again?",
+                    'Administrative Update', wx.YES_NO | wx.ICON_QUESTION)
+
+                if user_answer == 2:  # User wishes to re-attempt file deletion:
+                    user_answer = None
+                    continue
+                else:  # User has elected to not re-attempt file deletion.
+                    user_answer = None
+                    # Return failed-execution indication to the calling function.
+                    return False
+
+            # Break from the "while" loop:
+            break
+
+        # At this point, function is presumed to have executed successfully. Return successful-execution
+        # indication to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("delete_mars_photos_workbooks", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
 
 
 def email_from_contact_page(form):
@@ -727,6 +807,212 @@ def email_from_contact_page(form):
 
         # Return failed-execution message to the calling function:
         return "An error has occurred. Your message was not sent."
+
+
+def export_data_to_spreadsheet_standard(data_scope, data_to_export):
+    """Function to export data to a spreadsheet, with all appropriate formatting applied"""
+    try:
+        # Capture current date/time:
+        current_date_time = datetime.now()
+        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
+
+        # Create the workbook.  If an error occurred, update system log and return
+        # failed-execution indication to the calling function:
+        workbook = create_workbook(f"{spreadsheet_attributes[data_scope]["wrkbk_name"]}")
+        if workbook == None:
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Workbook could not be created.")
+            return False
+
+        # Create the worksheet to contain data from the "data_to_export" variable.  If an error occurred,
+        # update system log and return failed-execution indication to the calling function:
+        worksheet = create_worksheet(workbook, spreadsheet_attributes[data_scope]["wksht_name"])
+        if worksheet == None:
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Worksheet could not be created.")
+            return False
+
+        # Add and format the column headers. If an error occurred, update system log and return failed-execution indication to the calling function:
+        if not prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["headers"]):
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Spreadsheet headers could not be completely implemented.")
+            return False
+
+        # Write/format each item's data into the worksheet, using the "data_to_export" variable as the data source.
+        # If an error occurred, update system log and return failed-execution indication to the calling function:
+        if data_scope == "constellations":
+            i = 3
+            for key in data_to_export:
+                if not prepare_spreadsheet_main_contents(workbook, worksheet, "constellation_data",dict_name=data_to_export, key=key, i=i):
+                    update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")","Error: Spreadsheet main contents could not be completely implemented.")
+                    return False
+                i += 1
+        else:  # Other items except constellations.
+            if not prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["data_to_export_name"], list_name=data_to_export):
+                update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")","Error: Spreadsheet main contents could not be completely implemented.")
+                return False
+
+        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins.
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        if not prepare_spreadsheet_supplemental_formatting(workbook, worksheet, spreadsheet_attributes[data_scope]["supp_fmtg"], current_date_time_spreadsheet, data_to_export, spreadsheet_attributes[data_scope]["num_cols_minus_one"], spreadsheet_attributes[data_scope]["col_widths"] ):
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Spreadsheet formatting could not be completed.")
+            return False
+
+        # Complete file creation/closure of the workbook, checking if the file is open.  If an error occurred or if file is open and user elected to not
+        # re-attempt file creation/closure, update system log and return failed-execution indication to the calling function:
+        if not close_workbook(workbook):
+            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Spreadsheet file creation failed.")
+            return False
+
+        # Return successful-execution indication to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
+
+
+def export_mars_photos_to_spreadsheet(photos_available, photo_details):
+    """Function to export data on available Mars rover photos to a spreadsheet, with all appropriate formatting applied"""
+    try:
+        # Inform user that export-to-spreadsheet execution will begin:
+        dlg = PBI.PyBusyInfo("Photos from Mars: Exporting results to spreadsheet file...", title="Administrative Update")
+
+        # Capture current date/time:
+        current_date_time = datetime.now()
+        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
+
+        # Create the workbook.  If an error occurred, update system log and return
+        # failed-execution indication to the calling function:
+        photos_available_workbook = create_workbook(f"Mars Photos - Summary.xlsx")
+        if photos_available_workbook == None:
+            update_system_log("export_mars_photos_to_spreadsheet", "Error: Workbook (photos available summary) not be created.")
+            return False
+
+        # Create the worksheet to contain photos-available data from the "photos_available" list of database records.
+        # If an error occurred, update system log and return failed-execution indication to the calling function::
+        photos_available_worksheet = create_worksheet(photos_available_workbook, f"Summary")
+        if photos_available_worksheet == None:
+            update_system_log("export_mars_photos_to_spreadsheet", "Error: Worksheet (photos available summary) could not be created.")
+            return False
+
+        # Add and format the column headers. If an error occurred, update system log and return failed-execution indication to the calling function:
+        if not prepare_spreadsheet_main_contents(photos_available_workbook, photos_available_worksheet, "photos_available_headers"):
+            update_system_log("export_mars_photos_to_spreadsheet", "Error: Spreadsheet headers (for photos available summary) could not be completely implemented.")
+            return False
+
+        # Populate the "Summary" worksheet with the contents of the "photos_available" list of database records:
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        if not prepare_spreadsheet_main_contents(photos_available_workbook, photos_available_worksheet,"photos_available_data", list_name=photos_available):
+            update_system_log("export_mars_photos_to_spreadsheet","Error: Spreadsheet main contents (for photos available summary) could not be completely implemented.")
+            return False
+
+        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins.
+        # If function failed, update system log and return failed-execution indication to the calling function:
+        if not prepare_spreadsheet_supplemental_formatting(photos_available_workbook, photos_available_worksheet, "photos_available", current_date_time_spreadsheet, photos_available, 4, (15, 15, 7, 80, 15)):
+            update_system_log("export_mars_photos_to_spreadsheet (" + data_scope + ")", "Error: Spreadsheet formatting (for photos available summary) could not be completed.")
+            return False
+
+        # Complete file creation/closure of the photos available summary workbook, checking if the file is open.
+        # If an error occurred or if file is open and user elected to not re-attempt file creation/closure, update
+        # system log and return failed-execution indication to the calling function:
+        dlg = PBI.PyBusyInfo("Photos from Mars: Spreadsheet file 'Mars Photos - Summary.xlsx': Saving in progress...", title="Administrative Update")
+        if not close_workbook(photos_available_workbook):
+            update_system_log("export_mars_photos_to_spreadsheet", "Error: Spreadsheet file creation (photos available summary) failed.")
+            return False
+        dlg = PBI.PyBusyInfo("Photos from Mars: Spreadsheet file 'Mars Photos - Summary.xlsx': Saving completed...", title="Administrative Update")
+
+        # For each rover, create and format a worksheet to contain details for available photos taken by that rover
+        # each earth year.  If function failed, update system log and return failed-execution indication to the calling function:
+        rovers_represented = get_mars_photos_summarize_photo_counts_by_rover_and_earth_year()
+        if rovers_represented == []:
+            update_system_log("export_mars_photos_to_spreadsheet", "Error: 'rovers_represented' data could not be retrieved.")
+            return False
+
+        # Initialize variables needed to process photo details using the contents "rovers_represented" variable:
+        worksheets_needed = []
+        row_start = 0
+        row_end = 0
+
+        # Capture all of the photo-details workbooks that need to be created:
+        for i in range(0, len(rovers_represented)):
+            rover_name = rovers_represented[i][0]
+            earth_year = rovers_represented[i][1]
+            rover_earth_year_combo = rovers_represented[i][2]
+
+            # Determine whether a particular rover/earth year combo needs to be split up into
+            # multiple workbooks (based on whether its contents exceeds 65530 photos):
+            if rovers_represented[i][3] <= 65530:
+                row_end += rovers_represented[i][3]
+                worksheets_needed.append((rover_earth_year_combo, earth_year, rover_name, 1, row_start, row_end))
+                row_start = row_end
+            else:
+                worksheet_to_add = ""
+                rover_number_of_sheets_needed = math.ceil(rovers_represented[i][3] / 65530)
+                for j in range(0, rover_number_of_sheets_needed):
+                    worksheet_to_add = rover_earth_year_combo + "_Part" + str(j + 1)
+                    if (j + 1) == rover_number_of_sheets_needed:
+                        row_end += rovers_represented[i][3] - 65530
+                    else:
+                        row_end += 65530
+                    worksheets_needed.append((worksheet_to_add, earth_year, rover_name, rover_number_of_sheets_needed, row_start, row_end))
+                    row_start = row_end
+
+        # Create and populate photo details workbook for the current rover/earth year combo being processed:
+        for i in range(0, len(worksheets_needed)):
+            # Create the workbook.  If an error occurred, update system log and return
+            # failed-execution indication to the calling function:
+            photo_details_workbook = create_workbook(f"Mars Photos - Details - {worksheets_needed[i][0]}.xlsx")
+            if photo_details_workbook == None:
+                update_system_log("export_mars_photos_to_spreadsheet",
+                                  "Error: Workbook (photo details for {worksheets_needed[i][0]}) not be created.")
+                return False
+
+            # Create the worksheet to contain photo details data from the "photo_details" list of database records.
+            # If an error occurred, update system log and return failed-execution indication to the calling function::
+            photo_details_worksheet = create_worksheet(photo_details_workbook, "Details")
+            if photo_details_worksheet == None:
+                update_system_log("export_mars_photos_to_spreadsheet",
+                                  f"Error: Worksheet (photo details for {worksheets_needed[i][0]}) could not be created.")
+                return False
+
+            # Add and format the column headers. If an error occurred, update system log and return failed-execution indication to the calling function:
+            if not prepare_spreadsheet_main_contents(photo_details_workbook, photo_details_worksheet,"photo_details_headers"):
+                update_system_log("export_mars_photos_to_spreadsheet",
+                                  f"Error: Spreadsheet headers (photo details for {worksheets_needed[i][0]}) could not be completely implemented.")
+                return False
+
+            # Populate the worksheet with its corresponding contents of the "photo_details" list of database records.
+            # If function failed, update system log and return failed-execution indication to the calling function:
+            if not prepare_spreadsheet_main_contents(photo_details_workbook, photo_details_worksheet, "photo_details_data", list_name=photo_details, worksheet_details=worksheets_needed[i]):
+                update_system_log("export_mars_photos_to_spreadsheet",
+                                  "Error: Spreadsheet main contents (photo details for {worksheets_needed[i][0]}) could not be completely implemented.")
+                return False
+
+            # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins.
+            # If function failed, update system log and return failed-execution indication to the calling function:
+            if not prepare_spreadsheet_supplemental_formatting(photo_details_workbook, photo_details_worksheet, "photo_details", current_date_time_spreadsheet, photos_available, 4, (15, 15, 7, 15, 30, 50, 80), rover_name=worksheets_needed[i][2], earth_year=worksheets_needed[i][1], rover_earth_year_combo=worksheets_needed[i][0], rover_number_of_sheets_needed=worksheets_needed[i][3]):
+                update_system_log("export_mars_photos_to_spreadsheet (" + data_scope + ")",
+                                  "Error: Spreadsheet formatting (photo details for {worksheets_needed[i][0]}) could not be completed.")
+                return False
+
+            # Complete file creation/closure of the workbook, checking if the file is open.  If an error occurred or if file is open and user elected to not
+            # re-attempt file creation/closure, update system log and return failed-execution indication to the calling function:
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Spreadsheet file 'Mars Photos - Details - {worksheets_needed[i][0]}.xlsx': Saving in progress...",title="Administrative Update")
+            if not close_workbook(photo_details_workbook):
+                return False
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Spreadsheet file 'Mars Photos - Details - {worksheets_needed[i][0]}.xlsx': Saving completed...",title="Administrative Update")
+
+        # Return successful-execution indication to the calling function:
+        dlg = None
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("export_mars_photos_to_spreadsheet", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
 
 
 def find_element(driver, find_type, find_details):
@@ -1369,19 +1655,30 @@ def get_mars_photos():
     global mars_rovers
 
     try:
+
+        # Delete all existing files pertaining to this scope. If the function failed, update system
+        # log and return failed-execution indication to the calling function:
+        if not delete_mars_photos_workbooks():
+            update_system_log("get_mars_photos", "Error: Previous spreadsheet file(s) could not be deleted.")
+            return "Error: Previous spreadsheet file(s) could not be deleted.", False
+
         # Retrieve, from the database, a list of all rovers that are currently active for purposes of
-        # data production.  If the function called returns an empty list, update system log and return
+        # data production.  If the function called returns an empty directory, update system log and return
         # failed-execution indication to the calling function:
-        mars_rovers = retrieve_from_database("mars_rovers")
-        if mars_rovers == {}:
+        mars_rovers_from_db = retrieve_from_database("mars_rovers")
+        if mars_rovers_from_db == {}:
             update_system_log("get_mars_photos", "Error: Data (Mars rovers) cannot be obtained at this time.")
             return "Error: Data (Mars rovers) cannot be obtained at this time.", False
 
         # If an empty list was returned, no records satisfied the query.  Therefore, update system log and
         # return failed-execution indication to the calling function:
-        elif mars_rovers == []:
+        elif mars_rovers_from_db == []:
             update_system_log("get_mars_photos", "No matching records were retrieved (Mars rovers).")
             return "No matching records were retrieved (Mars rovers).", False
+
+        # Populate "mars_rovers" with list of active rovers per the database:
+        for record in mars_rovers_from_db:
+            mars_rovers.append(record.rover_name)
 
         # Inform user that database will be checked for updates:
         dlg = PBI.PyBusyInfo("Photos from Mars: Checking for updates needed...", title="Administrative Update")
@@ -1483,8 +1780,7 @@ def get_mars_photos():
 def get_mars_photos_summarize_photo_counts_by_rover_and_earth_year():
     """Function to summarize photo counts by rover and earth year.  This supports final spreadsheet creation"""
     try:
-        # with app.app_context():
-        # Get counts (by rover name and year of earth date) from "mars_photo_details" database table. If the
+        # Get counts (by rover name and earth date) from "mars_photo_details" database table. If the
         # function called returns a failed-execution indication (i.e., an empty dictionary), update system log
         # and return failed-execution indication to the calling function:
         photo_counts = retrieve_from_database("mars_photo_details_get_counts_by_rover_and_earth_date")
@@ -1601,6 +1897,82 @@ def get_mars_photos_summarize_photos_available(photos_available):
         return {}
 
 
+def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mismatch_between_summaries):
+    try:
+        if len(rover_earth_date_combo_mismatch_between_summaries) > 0:
+            # For each rover/earth date combo where there is a mismatch between what the API provided and what exists in the database,
+            # perform necessary updates to the database to align with what the API indicates is current:
+            for i in range(0, len(rover_earth_date_combo_mismatch_between_summaries)):
+                dlg = PBI.PyBusyInfo(f"Photos from Mars: {i + 1} of {len(rover_earth_date_combo_mismatch_between_summaries)} rover/earth date combinations needing update ({round((i+1)/len(rover_earth_date_combo_mismatch_between_summaries) * 100, 1)} %)...", title="Administrative Update")
+                photo_details_rover_earth_date_combo = []
+
+                # Capture a count of how many records are in the database for the rover-earth date combo.
+                # If function failed, update system log and return failed-execution indication to the calling function:
+                existing_record_count = retrieve_from_database("mars_photo_details_rover_earth_date_combo_count",
+                                                               rover_name=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
+                                                               earth_date=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1])
+                if existing_record_count == {}:
+                    update_system_log("get_mars_photos_update_database",
+                                      f"Error: Pre-update retrieval of existing detail records failed (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]}).")
+                    return "Error: Pre-update retrieval of existing detail records failed (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split('_')[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split('_')[1]}).", False
+
+                # Capture updated record count for the rover/earth date combo being processed, using the "photos_available" dictionary to represent
+                # what the API has indicated is current:
+                updated_record_count = photos_available[rover_earth_date_combo_mismatch_between_summaries[i]]["total_photos"]
+
+                # Provide user a progress update:
+                dlg = PBI.PyBusyInfo(f"Photos from Mars: Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Total Photos in DB: {existing_record_count}\nRover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Total Photos (updated from API): {updated_record_count}\nUpdate in progress...", title="Administrative Update")
+
+                # Capture the updated record set (for the rover/earth-date combo being processed) from what the API provided:
+                dict_to_add = get_mars_photos_update_from_api(rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0], rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1])
+                if dict_to_add != {}:
+                    # Delete existing records in DB for this rover/earth date combo.  If function failed,
+                    # update system log and return failed-execution indication to the calling function:
+                    if not update_database("update_mars_photo_details_delete_existing", {},
+                                           rover_name=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
+                                           earth_date=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]):
+                        update_system_log("get_mars_photos_update_database",
+                                          f"Error: Pre-update deletion of existing detail records failed (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]}).")
+                        return "Error: Pre-update deletion of existing detail records failed (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split('_')[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split('_')[1]}).", False
+
+                    # Populate dictionary which will be used to update database with updated detail records for the rover/earth date combo being processed:
+                    for j in range(0, len(dict_to_add)):
+                        dict_to_add_sub = {
+                            "rover_earth_date_combo": dict_to_add[j]["rover"]["name"] + "_" + dict_to_add[j][
+                                "earth_date"],
+                            "rover_name": dict_to_add[j]["rover"]["name"],
+                            "sol": dict_to_add[j]["sol"],
+                            "pic_id": dict_to_add[j]["id"],
+                            "earth_date": dict_to_add[j]["earth_date"],
+                            "camera_name": dict_to_add[j]["camera"]["name"],
+                            "camera_full_name": dict_to_add[j]["camera"]["full_name"],
+                            "url": dict_to_add[j]["img_src"]
+                        }
+                        photo_details_rover_earth_date_combo.append(dict_to_add_sub)
+
+                    # Update the "mars_photo_details" database table with the contents of the "photo_details_rover_earth_date_combo" list.
+                    # If the function called returns a failed-execution indication, If function failed, update system log and return
+                    # failed-execution indication to the calling function:
+                    if not update_database("update_mars_photo_details", photo_details_rover_earth_date_combo):
+                        update_system_log("get_mars_photos_update_database",
+                                          f"Error: Database could not be updated (photo details) (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]}).")
+                        return "Error: Database could not be updated (photo details) (Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split('_')[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split('_')[1]}).", False
+
+                    else:
+                        # Inform user that the update has been successfully completed:
+                        dlg = PBI.PyBusyInfo(f"Photos from Mars: Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Update complete.",title="Administrative Update")
+
+        # At this point, function is deemed to have executed successfully.  Return successful-execution indication to the calling function:
+        dlg = None
+        return "", True
+
+    except:  # An error has occurred.
+        update_system_log("get_mars_photos_update_database", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
+
+
 def get_mars_photos_update_from_api(rover_name, earth_date):
     """Function to retrieve, via an API request, photos available for a particular rover/earth date combination"""
     try:
@@ -1644,7 +2016,6 @@ def get_people_in_space_now():
             return "Error: API request failed. Data cannot be obtained at this time.", False
 
     except:  # An error has occurred.
-        print(f"Error (get_people_in_space_now): {traceback.format_exc()}")
         update_system_log("get_people_in_space_now", traceback.format_exc())
         return "An error has occurred. Data cannot be obtained at this time.", False
 
@@ -1680,6 +2051,297 @@ def get_space_news():
     finally:
         # Return results to the calling function:
         return success, error_message
+
+
+def prepare_spreadsheet_get_format(workbook, name):
+    """Function for identifying the format to be used in formatting content in spreadsheet, based on the type of content involved"""
+    # NOTE: Error handling is deferred to the calling function.
+    if name == "column_headers":  # Column headers
+        return workbook.add_format({"bold": 3, "underline": True, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
+
+    elif name == "data":  # Main body of data (excluding columns to be treated as active URLs)
+        return workbook.add_format({"bold": 0, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
+
+    elif name == "url":  # URLs
+        return workbook.add_format({"bold": 0, "font_color": "blue", "underline": 1, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
+
+    elif name == "spreadsheet_header":  # Header info. (e.g., title, generation date/time) at beginning of spreadsheet
+        return workbook.add_format({"bold": 3, "font_name": "Calibri", "font_size": 16})
+
+
+def prepare_spreadsheet_main_contents(workbook, worksheet, name, **kwargs):
+    """Function for adding and formatting spreadsheet content based on the type of content being worked on"""
+    try:
+        if name == "approaching_asteroids_data":
+            # Capture optional arguments:
+            list_name = kwargs.get("list_name", None)
+
+            # Add/format main contents:
+            i = 3
+            for item in list_name:
+                worksheet.write(i, 0, item.close_approach_date, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 1, item.name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 2, str(item.id), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 3, "{:.2f}".format(round(item.absolute_magnitude_h,2)), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 4, "{:.2f}".format(round(item.estimated_diameter_km_min,2)), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 5, "{:.2f}".format(round(item.estimated_diameter_km_max,2)), prepare_spreadsheet_get_format(workbook, "data"))
+                if item.is_potentially_hazardous == 0:
+                    worksheet.write(i, 6, "No", prepare_spreadsheet_get_format(workbook, "data"))
+                elif item.is_potentially_hazardous == 1:
+                    worksheet.write(i, 6, "Yes", prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 7, "{:.2f}".format(round(item.relative_velocity_km_per_s,2)), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 8, "{:.2f}".format(round(item.miss_distance_km,2)), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 9, item.orbiting_body, prepare_spreadsheet_get_format(workbook, "data"))
+                if item.is_sentry_object == 0:
+                    worksheet.write(i, 10, "No", prepare_spreadsheet_get_format(workbook, "data"))
+                elif item.is_sentry_object == 1:
+                    worksheet.write(i, 10, "Yes", prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write_url(i, 11, item.url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for details.")
+                i += 1
+
+        elif name == "approaching_asteroids_headers":
+            worksheet.write(2, 0, "Close Approach Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 1, "Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 2, "ID", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 3, "[H] Absolute Magnitude", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 4, "Estimated Diameter (km) - Min.", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 5, "Estimated Diameter (km) - Max.", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 6, "Is Potentially Hazardous?", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 7, "Relative Velocity (km/s)", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 8, "Miss Distance (km)", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 9, "Orbiting Body", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 10, "Is Sentry Object?", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 11, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
+
+        elif name == "confirmed_planets_data":
+            # Capture optional arguments:
+            list_name = kwargs.get("list_name", None)
+
+            # Add/format main contents:
+            i = 3
+            for item in list_name:
+                worksheet.write(i, 0, item.host_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 1, str(item.host_num_stars), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 2, str(item.host_num_planets), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 3, item.planet_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 4, str(item.discovery_year), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 5, item.discovery_method, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 6, item.discovery_facility, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 7, item.discovery_telescope, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write_url(i, 8, item.url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for details.")
+                i += 1
+
+        elif name == "confirmed_planets_headers":
+            worksheet.write(2, 0, "Host Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 1, "# Stars", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 2, "# Planets", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 3, "Planet Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 4, "Discovery Year", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 5, "Discovery Method", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 6, "Discovery Facility", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 7, "Discovery Telescope", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 8, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
+
+        elif name == "constellation_headers":
+            worksheet.write(2, 0, "Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 1, "Abbv.", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 2, "Nickname", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 3, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 4, "Area", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 5, "Mythological Association", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 6, "First Appearance", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 7, "Brightest Star", prepare_spreadsheet_get_format(workbook, "column_headers"))
+
+        elif name == "constellation_data":
+            # Capture optional arguments:
+            dict_name = kwargs.get("dict_name", None)
+            key = kwargs.get("key", None)
+            i = kwargs.get("i", None)
+
+            # Add/format main contents:
+            worksheet.write(i, 0, key, prepare_spreadsheet_get_format(workbook, "data"))
+            worksheet.write(i, 1, dict_name[key]["abbreviation"], prepare_spreadsheet_get_format(workbook, "data"))
+            worksheet.write(i, 2, dict_name[key]["nickname"], prepare_spreadsheet_get_format(workbook, "data"))
+            worksheet.write_url(i, 3, dict_name[key]["url"])
+            worksheet.write(i, 4, dict_name[key]["area"], prepare_spreadsheet_get_format(workbook, "data"))
+            worksheet.write(i, 5, dict_name[key]["myth_assoc"], prepare_spreadsheet_get_format(workbook, "data"))
+            worksheet.write(i, 6, dict_name[key]["first_appear"], prepare_spreadsheet_get_format(workbook, "data"))
+            if key == "Serpens":
+                worksheet.write(i, 7,f"{dict_name[key]["brightest_star_name"]}\n{dict_name[key]["brightest_star_url"]}",prepare_spreadsheet_get_format(workbook, "data"))
+
+            else:
+                worksheet.write_url(i, 7, dict_name[key]["brightest_star_url"], string=f"{dict_name[key]["brightest_star_name"]}")
+
+        elif name == "photo_details_headers":
+            worksheet.write(2, 0, "Rover Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 1, "Earth Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 2, "SOL", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 3, "Pic ID", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 4, "Camera Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 5, "Camera Full Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 6, "URL", prepare_spreadsheet_get_format(workbook, "column_headers"))
+
+        elif name == "photo_details_data":
+            # Capture optional arguments:
+            list_name = kwargs.get("list_name", None)
+            worksheet_details = kwargs.get("worksheet_details", None)
+
+            # Add/format main contents:
+            i = 3
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Exporting results to spreadsheet file 'Mars Photos - Details - {worksheet_details[0]}.xlsx': Processing...",
+                title="Administrative Update")
+
+            for j in range(worksheet_details[4], worksheet_details[5]):
+                worksheet.write(i, 0, list_name[j].rover_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 1, list_name[j].earth_date, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 2, str(list_name[j].sol), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 3, str(list_name[j].pic_id), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 4, list_name[j].camera_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 5, list_name[j].camera_full_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write_url(i, 6, list_name[j].url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for photo.")
+                i += 1
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Exporting results to spreadsheet file 'Mars Photos - Details - {worksheet_details[0]}.xlsx': Completed...",
+                title="Administrative Update")
+
+        elif name == "photos_available_headers":
+            worksheet.write(2, 0, "Rover Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 1, "Earth Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 2, "SOL", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 3, "Cameras", prepare_spreadsheet_get_format(workbook, "column_headers"))
+            worksheet.write(2, 4, "Total Photos Available", prepare_spreadsheet_get_format(workbook, "column_headers"))
+
+        elif name == "photos_available_data":
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Exporting results to spreadsheet file 'Mars Photos - Summary.xlsx': Processing...",
+                title="Administrative Update")
+
+            # Capture optional arguments:
+            list_name = kwargs.get("list_name", None)
+
+            # Add/format main contents:
+            i = 3
+            for item in list_name:
+                worksheet.write(i, 0, item.rover_name, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 1, item.earth_date, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 2, str(item.sol), prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 3, item.cameras, prepare_spreadsheet_get_format(workbook, "data"))
+                worksheet.write(i, 4, item.total_photos, prepare_spreadsheet_get_format(workbook, "data"))
+                i += 1
+
+            dlg = PBI.PyBusyInfo(
+                f"Photos from Mars: Exporting results to spreadsheet file 'Mars Photos - Summary.xlsx': Completed...",
+                title="Administrative Update")
+
+        # At this point, function is presumed to have executed succssfully.  Return successful-execution indication
+        # to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("prepare_spreadsheet_main_contents (" + name + ")", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
+
+
+def prepare_spreadsheet_supplemental_formatting(workbook, worksheet, name, current_date_time, dict_name, num_columns_minus_one, column_widths, **kwargs):
+    try:
+        # Add an auto-filter:
+        worksheet.autofilter(2, 0, len(dict_name) + 2, num_columns_minus_one)
+
+        # Auto-fit the worksheet:
+        worksheet.autofit()
+
+        # Set column widths as needed:
+        for i in range(0, len(column_widths)):
+            worksheet.set_column(i, i, column_widths[i])
+
+        # Set the footer:
+        worksheet.set_footer(f"{recognition[name]}\n\n&CFile Name: &F\n&CPage &P of &N")
+
+        # Add and format the spreadsheet header row, and implement the following: footer, page orientation, and margins:
+        if name == "approaching_asteroids":
+            # Add and format the spreadsheet header row:
+            worksheet.merge_range("A1:L1",f"APPROACHING ASTEROIDS DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Asteroids)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
+
+            # Set page orientation:
+            worksheet.set_landscape()
+
+            # Set the margins:
+            worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
+
+        if name == "confirmed_planets":
+            # Add and format the spreadsheet header row:
+            worksheet.merge_range("A1:I1",f"CONFIRMED PLANETS DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Confirmed Planets)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
+
+            # Set page orientation:
+            worksheet.set_landscape()
+
+            # Set the margins:
+            worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
+
+        elif name == "constellations":
+            # Add and format the spreadsheet header row:
+            worksheet.merge_range("A1:H1",f"CONSTELLATION DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Constellations)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
+
+            # Set page orientation:
+            worksheet.set_landscape()
+
+            # Set the margins:
+            worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
+
+        elif name == "photo_details":
+            # Capture optional arguments:
+            rover_name = kwargs.get("rover_name", None)
+            earth_year = kwargs.get("earth_year", None)
+            rover_earth_year_combo = kwargs.get("rover_earth_year_combo", None)
+            rover_number_of_sheets_needed = kwargs.get("rover_number_of_sheets_needed", None)
+
+            # Determine if rover/earth year combo needs multiple sheets:
+            part_number = str(rover_earth_year_combo).split("_Part")
+            if len(part_number) == 1:
+                part_number = ""
+            else:
+                part_number = f", Part {part_number[len(part_number)-1]} of {rover_number_of_sheets_needed}"
+
+            # Add and format the spreadsheet header row:
+            worksheet.merge_range("A1:G1",f"PHOTOS TAKEN BY MARS ROVER '{str(rover_name).upper()}' - Year {str(earth_year)}{part_number} (as of {current_date_time})", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
+
+            # Set page orientation:
+            worksheet.set_landscape()
+
+            # Set the margins:
+            worksheet.set_margins(1, 0.5, 1, 1)  # Left, right, top, bottom
+
+        elif name == "photos_available":
+            # Add and format the spreadsheet header row:
+            worksheet.merge_range("A1:E1",f"SUMMARY OF PHOTOS TAKEN BY MARS ROVERS (as of {current_date_time})", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
+
+            # Set page orientation:
+            worksheet.set_portrait()
+
+            # Set the margins:
+            worksheet.set_margins(1, 0.5, 1, 1)  # Left, right, top, bottom
+
+        # Freeze panes (for top row and left column):
+        worksheet.freeze_panes(3, 1)
+
+        # Identify the rows to print at top of each page:
+        worksheet.repeat_rows(0, 2)  # First row, last row
+
+        # Scale the pages to fit within the page boundaries:
+        worksheet.fit_to_pages(1, 0)
+
+        # At this point, function is presumed to have executed successfully. Return successful-execution indication
+        # to the calling function:
+        return True
+
+    except:  # An error has occurred.
+        update_system_log("prepare_spreadsheet_supplemental_formatting (" + name + ")", traceback.format_exc())
+
+        # Return failed-execution indication to the calling function:
+        return False
 
 
 def retrieve_from_database(trans_type, **kwargs):
@@ -1794,6 +2456,40 @@ def retrieve_from_database(trans_type, **kwargs):
 
         # Return empty dictionary as a failed-execution indication to the calling function:
         return {}
+
+
+def run_app():
+    """Main function for this application"""
+    global app
+
+    try:
+        # Load environmental variables from the ".env" file:
+        load_dotenv()
+
+        # Configure the SQLite database, relative to the app instance folder:
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///space.db"
+
+        # Initialize an instance of Bootstrap5, using the "app" object defined above as a parameter:
+        Bootstrap5(app)
+
+        # Retrieve the secret key to be used for CSRF protection:
+        app.secret_key = os.getenv("SECRET_KEY_FOR_CSRF_PROTECTION")
+
+        # Configure database tables.  If function failed, update system log and return
+        # failed-execution indication to the calling function::
+        if not config_database():
+            update_system_log("run_app", "Error: Database configuration failed.")
+            return False
+
+        # Configure web forms.  If function failed, update system log and return
+        # failed-execution indication to the calling function::
+        if not config_web_forms():
+            update_system_log("run_app", "Error: Web forms configuration failed.")
+            return False
+
+    except:  # An error has occurred.
+        update_system_log("run_app", traceback.format_exc())
+        return False
 
 
 def setup_selenium_driver(url, width, height):
@@ -2011,510 +2707,11 @@ def update_system_log(activity, log):
         dlg = None
 
 
-
-
-
-
-
-
-
-def export_data_to_spreadsheet_standard(data_scope, data_to_export):
-    """Function to export data to a spreadsheet, with all appropriate formatting applied"""
-    try:
-        # Capture current date/time:
-        current_date_time = datetime.now()
-        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
-
-        # Create the workbook.  If an error occurred, update system log and return
-        # failed-execution indication to the calling function:
-        workbook = create_workbook(f"{spreadsheet_attributes[data_scope]["wrkbk_name"]}")
-        if workbook == None:
-            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Workbook could not be created.")
-            return False
-
-        # Create the worksheet to contain data from the "data_to_export" variable.  If an error occurred,
-        # update system log and return failed-execution indication to the calling function:
-        worksheet = create_worksheet(workbook, spreadsheet_attributes[data_scope]["wksht_name"])
-        if worksheet == None:
-            update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", "Error: Worksheet could not be created.")
-            return False
-
-        # Add and format the column headers:
-        prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["headers"])
-
-        # Iterate through the "data_to_export" variable and write/format each asteroid's data into the worksheet:
-        if data_scope == "constellations":
-            i = 3
-            for key in data_to_export:
-                prepare_spreadsheet_main_contents(workbook, worksheet, "constellation_data",dict_name=data_to_export, key=key, i=i)
-                i += 1
-        else:
-            prepare_spreadsheet_main_contents(workbook, worksheet, spreadsheet_attributes[data_scope]["data_to_export_name"], list_name=data_to_export)
-
-        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-        prepare_spreadsheet_supplemental_formatting(workbook, worksheet, spreadsheet_attributes[data_scope]["supp_fmtg"], current_date_time_spreadsheet, data_to_export, spreadsheet_attributes[data_scope]["num_cols_minus_one"], spreadsheet_attributes[data_scope]["col_widths"] )
-
-        # Close the workbook, checking if the file is open:
-        close_workbook(workbook)
-
-        # Return successful-execution indication to the calling function:
-        return True
-
-    except:  # An error has occurred.
-        update_system_log("export_data_to_spreadsheet_standard (" + data_scope + ")", traceback.format_exc())
-
-        # Return failed-execution indication to the calling function:
-        return False
-
-
-def export_mars_photos_to_spreadsheet(photos_available, photo_details):
-    """Function to export data on available Mars rover photos to a spreadsheet, with all appropriate formatting applied"""
-    try:
-        # Inform user that export-to-spreadsheet execution will begin:
-        print("Mars photos: Exporting results to spreadsheet file...")
-
-        # Capture current date/time:
-        current_date_time = datetime.now()
-        current_date_time_spreadsheet = current_date_time.strftime("%d-%b-%Y @ %I:%M %p")
-
-        # Create the workbook:
-        photos_available_workbook = xlsxwriter.Workbook(f"Mars Photos - Summary.xlsx")
-
-        # Create the worksheet to contain photos-available data from the "photos_available" list of database records.
-        # If an error occurred, exit this procedure:
-        photos_available_worksheet = create_worksheet(photos_available_workbook, f"Summary")
-        if photos_available_worksheet == None:
-            exit()
-
-        # Add and format the column headers:
-        prepare_spreadsheet_main_contents(photos_available_workbook, photos_available_worksheet, "photos_available_headers")
-
-        # Populate the "Photo Summary" worksheet with the contents of the "photos_available" list of database records:
-        prepare_spreadsheet_main_contents(photos_available_workbook, photos_available_worksheet,"photos_available_data", list_name=photos_available)
-
-        # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-        prepare_spreadsheet_supplemental_formatting(photos_available_workbook, photos_available_worksheet, "photos_available", current_date_time_spreadsheet, photos_available, 4, (15, 15, 7, 80, 15))
-
-        # Close the workbook, checking if the file is open:
-        print(f"Mars photos: Spreadsheet file 'Mars Photos - Summary.xlsx': Saving in progress...")
-        close_workbook(photos_available_workbook)
-        print(f"Mars photos: Spreadsheet file 'Mars Photos - Summary.xlsx': Saving completed...")
-
-        # For each rover, create and format a worksheet to contain details for available photos
-        # taken by that rover each earth year:
-        # rovers_represented = []
-        rovers_represented = get_mars_photos_summarize_photo_counts_by_rover_and_earth_year()
-        if rovers_represented == []:
-            exit()
-
-        worksheets_needed = []
-        row_start = 0
-        row_end = 0
-        for i in range(0, len(rovers_represented)):
-            rover_name = rovers_represented[i][0]
-            earth_year = rovers_represented[i][1]
-            rover_earth_year_combo = rovers_represented[i][2]
-            if rovers_represented[i][3] <= 65530:
-                row_end += rovers_represented[i][3]
-                worksheets_needed.append((rover_earth_year_combo, earth_year, rover_name, 1, row_start, row_end))
-                row_start = row_end
-            else:
-                worksheet_to_add = ""
-                rover_number_of_sheets_needed = math.ceil(rovers_represented[i][3] / 65530)
-
-                for j in range(0, rover_number_of_sheets_needed):
-                    worksheet_to_add = rover_earth_year_combo + "_Part" + str(j + 1)
-                    if (j + 1) == rover_number_of_sheets_needed:
-                        row_end += rovers_represented[i][3] - 65530
-                    else:
-                        row_end += 65530
-                    worksheets_needed.append((worksheet_to_add, earth_year, rover_name, rover_number_of_sheets_needed, row_start, row_end))
-                    row_start = row_end
-
-        for i in range(0, len(worksheets_needed)):
-            # Create the workbook:
-            photo_details_workbook = xlsxwriter.Workbook(f"Mars Photos - Details - {worksheets_needed[i][0]}.xlsx")
-
-            # Create the worksheet to contain photo-details data from the "photo_details" list of database records.
-            # If an error occurred, exit this procedure:
-            photo_details_worksheet = create_worksheet(photo_details_workbook, "Details")
-            if photo_details_worksheet == None:
-                exit()
-
-            # Add and format the column headers:
-            prepare_spreadsheet_main_contents(photo_details_workbook, photo_details_worksheet,"photo_details_headers")
-
-            # Populate the worksheet with its corresponding contents of the "photo_details" list of database records:
-            prepare_spreadsheet_main_contents(photo_details_workbook, photo_details_worksheet, "photo_details_data", list_name=photo_details, worksheet_details=worksheets_needed[i])
-
-            # Add and format the spreadsheet header row, and implement the following: column widths, footer, page orientation, and margins:
-            prepare_spreadsheet_supplemental_formatting(photo_details_workbook, photo_details_worksheet, "photo_details", current_date_time_spreadsheet, photos_available, 4, (15, 15, 7, 15, 30, 50, 80), rover_name=worksheets_needed[i][2], earth_year=worksheets_needed[i][1], rover_earth_year_combo=worksheets_needed[i][0], rover_number_of_sheets_needed=worksheets_needed[i][3])
-
-            # Close the workbook, checking if the file is open:
-            print(f"Mars photos: Spreadsheet file 'Mars Photos - Details - {worksheets_needed[i][0]}.xlsx': Saving in progress...")
-            close_workbook(photo_details_workbook)
-            print(f"Mars photos: Spreadsheet file 'Mars Photos - Details - {worksheets_needed[i][0]}.xlsx': Saving completed.")
-
-        # Return successful-execution indication to the calling function:
-        return True
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Export Mars rover photos data to SS): {err}")
-
-        # Return failed-execution indication to the calling function:
-        return False
-
-
-
-
-
-
-
-def prepare_spreadsheet_main_contents(workbook, worksheet, name, **kwargs):
-    """Function for adding and formatting spreadsheet content based on the type of content being worked on"""
-    if name == "approaching_asteroids_data":
-        # Capture optional arguments:
-        list_name = kwargs.get("list_name", None)
-
-        # Add/format main contents:
-        i = 3
-        for item in list_name:
-            worksheet.write(i, 0, item.close_approach_date, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 1, item.name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 2, str(item.id), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 3, "{:.2f}".format(round(item.absolute_magnitude_h,2)), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 4, "{:.2f}".format(round(item.estimated_diameter_km_min,2)), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 5, "{:.2f}".format(round(item.estimated_diameter_km_max,2)), prepare_spreadsheet_get_format(workbook, "data"))
-            if item.is_potentially_hazardous == 0:
-                worksheet.write(i, 6, "No", prepare_spreadsheet_get_format(workbook, "data"))
-            elif item.is_potentially_hazardous == 1:
-                worksheet.write(i, 6, "Yes", prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 7, "{:.2f}".format(round(item.relative_velocity_km_per_s,2)), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 8, "{:.2f}".format(round(item.miss_distance_km,2)), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 9, item.orbiting_body, prepare_spreadsheet_get_format(workbook, "data"))
-            if item.is_sentry_object == 0:
-                worksheet.write(i, 10, "No", prepare_spreadsheet_get_format(workbook, "data"))
-            elif item.is_sentry_object == 1:
-                worksheet.write(i, 10, "Yes", prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write_url(i, 11, item.url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for details.")
-            i += 1
-
-    elif name == "approaching_asteroids_headers":
-        worksheet.write(2, 0, "Close Approach Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 1, "Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 2, "ID", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 3, "[H] Absolute Magnitude", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 4, "Estimated Diameter (km) - Min.", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 5, "Estimated Diameter (km) - Max.", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 6, "Is Potentially Hazardous?", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 7, "Relative Velocity (km/s)", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 8, "Miss Distance (km)", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 9, "Orbiting Body", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 10, "Is Sentry Object?", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 11, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
-
-    elif name == "confirmed_planets_data":
-        # Capture optional arguments:
-        list_name = kwargs.get("list_name", None)
-
-        # Add/format main contents:
-        i = 3
-        for item in list_name:
-            worksheet.write(i, 0, item.host_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 1, str(item.host_num_stars), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 2, str(item.host_num_planets), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 3, item.planet_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 4, str(item.discovery_year), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 5, item.discovery_method, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 6, item.discovery_facility, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 7, item.discovery_telescope, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write_url(i, 8, item.url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for details.")
-            i += 1
-
-    elif name == "confirmed_planets_headers":
-        worksheet.write(2, 0, "Host Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 1, "# Stars", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 2, "# Planets", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 3, "Planet Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 4, "Discovery Year", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 5, "Discovery Method", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 6, "Discovery Facility", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 7, "Discovery Telescope", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 8, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
-
-    elif name == "constellation_headers":
-        worksheet.write(2, 0, "Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 1, "Abbv.", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 2, "Nickname", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 3, "URL for Details", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 4, "Area", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 5, "Mythological Association", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 6, "First Appearance", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 7, "Brightest Star", prepare_spreadsheet_get_format(workbook, "column_headers"))
-
-    elif name == "constellation_data":
-        # Capture optional arguments:
-        dict_name = kwargs.get("dict_name", None)
-        key = kwargs.get("key", None)
-        i = kwargs.get("i", None)
-
-        # Add/format main contents:
-        worksheet.write(i, 0, key, prepare_spreadsheet_get_format(workbook, "data"))
-        worksheet.write(i, 1, dict_name[key]["abbreviation"], prepare_spreadsheet_get_format(workbook, "data"))
-        worksheet.write(i, 2, dict_name[key]["nickname"], prepare_spreadsheet_get_format(workbook, "data"))
-        worksheet.write_url(i, 3, dict_name[key]["url"])
-        worksheet.write(i, 4, dict_name[key]["area"], prepare_spreadsheet_get_format(workbook, "data"))
-        worksheet.write(i, 5, dict_name[key]["myth_assoc"], prepare_spreadsheet_get_format(workbook, "data"))
-        worksheet.write(i, 6, dict_name[key]["first_appear"], prepare_spreadsheet_get_format(workbook, "data"))
-        if key == "Serpens":
-            worksheet.write(i, 7,f"{dict_name[key]["brightest_star_name"]}\n{dict_name[key]["brightest_star_url"]}",prepare_spreadsheet_get_format(workbook, "data"))
-
-        else:
-            worksheet.write_url(i, 7, dict_name[key]["brightest_star_url"], string=f"{dict_name[key]["brightest_star_name"]}")
-
-    elif name == "photo_details_headers":
-        worksheet.write(2, 0, "Rover Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 1, "Earth Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 2, "SOL", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 3, "Pic ID", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 4, "Camera Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 5, "Camera Full Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 6, "URL", prepare_spreadsheet_get_format(workbook, "column_headers"))
-
-    elif name == "photo_details_data":
-        # Capture optional arguments:
-        list_name = kwargs.get("list_name", None)
-        worksheet_details = kwargs.get("worksheet_details", None)
-
-        # Add/format main contents:
-        i = 3
-        print(f"Mars photos: Exporting results to spreadsheet file 'Mars Photos - Details - {worksheet_details[0]}.xlsx': Processing...")
-        for j in range(worksheet_details[4], worksheet_details[5]):
-            worksheet.write(i, 0, list_name[j].rover_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 1, list_name[j].earth_date, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 2, str(list_name[j].sol), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 3, str(list_name[j].pic_id), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 4, list_name[j].camera_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 5, list_name[j].camera_full_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write_url(i, 6, list_name[j].url, prepare_spreadsheet_get_format(workbook, "url"), tip="Click here for photo.")
-            i += 1
-        print(f"Mars photos: Exporting results to spreadsheet file 'Mars Photos - Details - {worksheet_details[0]}.xlsx': Completed.")
-
-    elif name == "photos_available_headers":
-        worksheet.write(2, 0, "Rover Name", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 1, "Earth Date", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 2, "SOL", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 3, "Cameras", prepare_spreadsheet_get_format(workbook, "column_headers"))
-        worksheet.write(2, 4, "Total Photos Available", prepare_spreadsheet_get_format(workbook, "column_headers"))
-
-    elif name == "photos_available_data":
-        print(f"Mars photos: Exporting results to spreadsheet file 'Mars Photos - Summary.xlsx': Processing...")
-        # Capture optional arguments:
-        list_name = kwargs.get("list_name", None)
-
-        # Add/format main contents:
-        i = 3
-        for item in list_name:
-            worksheet.write(i, 0, item.rover_name, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 1, item.earth_date, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 2, str(item.sol), prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 3, item.cameras, prepare_spreadsheet_get_format(workbook, "data"))
-            worksheet.write(i, 4, item.total_photos, prepare_spreadsheet_get_format(workbook, "data"))
-            i += 1
-
-        print(f"Mars photos: Exporting results to spreadsheet file 'Mars Photos - Summary.xlsx': Completed.")
-
-
-def prepare_spreadsheet_supplemental_formatting(workbook, worksheet, name, current_date_time, dict_name, num_columns_minus_one, column_widths, **kwargs):
-    # Add an auto-filter:
-    worksheet.autofilter(2, 0, len(dict_name) + 2, num_columns_minus_one)
-
-    # Auto-fit the worksheet:
-    worksheet.autofit()
-
-    # Set column widths as needed:
-    for i in range(0, len(column_widths)):
-        worksheet.set_column(i, i, column_widths[i])
-
-    # Add and format the spreadsheet header row, and implement the following: footer, page orientation, and margins:
-    if name == "approaching_asteroids":
-        # Add and format the spreadsheet header row:
-        worksheet.merge_range("A1:L1",f"APPROACHING ASTEROIDS DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Asteroids)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
-
-        # Set the footer:
-        worksheet.set_footer(f"Data is from the NASA JPL Asteroid team (http://neo.jpl.nasa.gov/); API maintained by SpaceRocks Team: David Greenfield, Arezu Sarvestani, Jason English and Peter Baunach\n\n&CFile Name: &F\n&CPage &P of &N")
-
-        # Set page orientation:
-        worksheet.set_landscape()
-
-        # Set the margins:
-        worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
-
-    if name == "confirmed_planets":
-        # Add and format the spreadsheet header row:
-        worksheet.merge_range("A1:I1",f"CONFIRMED PLANETS DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Confirmed Planets)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
-
-        # Set the footer:
-        worksheet.set_footer(f"This research has made use of the NASA Exoplanet Archive. Reference: DOI #10.26133/NEA12\n\n&CFile Name: &F\n&CPage &P of &N")
-
-        # Set page orientation:
-        worksheet.set_landscape()
-
-        # Set the margins:
-        worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
-
-    elif name == "constellations":
-        # Add and format the spreadsheet header row:
-        worksheet.merge_range("A1:H1",f"CONSTELLATION DATA (as of {current_date_time}) ({'{:,}'.format(len(dict_name))} Constellations)", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
-
-        # Set the footer:
-        worksheet.set_footer(f"Data courtesy of: 1) Skyfield, 2) © Dominic Ford 2011–2024.; Maps: GO ASTRONOMY © 2024\n\n&CFile Name: &F\n&CPage &P of &N")
-
-        # Set page orientation:
-        worksheet.set_landscape()
-
-        # Set the margins:
-        worksheet.set_margins(0.5, 0.5, 1, 1)  # Left, right, top, bottom
-
-    elif name == "photo_details":
-        # Capture optional arguments:
-        rover_name = kwargs.get("rover_name", None)
-        earth_year = kwargs.get("earth_year", None)
-        rover_earth_year_combo = kwargs.get("rover_earth_year_combo", None)
-        rover_number_of_sheets_needed = kwargs.get("rover_number_of_sheets_needed", None)
-
-        # Determine if rover/earth year combo needs multiple sheets:
-        part_number = str(rover_earth_year_combo).split("_Part")
-        if len(part_number) == 1:
-            part_number = ""
-        else:
-            part_number = f", Part {part_number[len(part_number)-1]} of {rover_number_of_sheets_needed}"
-
-        # Add and format the spreadsheet header row:
-        worksheet.merge_range("A1:G1",f"PHOTOS TAKEN BY MARS ROVER '{str(rover_name).upper()}' - Year {str(earth_year)}{part_number} (as of {current_date_time})", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
-
-        # Set the footer:
-        worksheet.set_footer(f"Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com/\n\n&CFile Name: &F\n&CPage &P of &N")
-
-        # Set page orientation:
-        worksheet.set_landscape()
-
-        # Set the margins:
-        worksheet.set_margins(1, 0.5, 1, 1)  # Left, right, top, bottom
-
-    elif name == "photos_available":
-        # Add and format the spreadsheet header row:
-        worksheet.merge_range("A1:E1",f"SUMMARY OF PHOTOS TAKEN BY MARS ROVERS (as of {current_date_time})", prepare_spreadsheet_get_format(workbook, "spreadsheet_header"))
-
-        # Set the footer:
-        worksheet.set_footer(f"Data courtesy of https://github.com/chrisccerami/mars-photo-api, https://api.nasa.gov, and https://mars-photos.herokuapp.com/\n\n&CFile Name: &F\n&CPage &P of &N")
-
-        # Set page orientation:
-        worksheet.set_portrait()
-
-        # Set the margins:
-        worksheet.set_margins(1, 0.5, 1, 1)  # Left, right, top, bottom
-
-    # Freeze panes (for top row and left column):
-    worksheet.freeze_panes(3, 1)
-
-    # Identify the rows to print at top of each page:
-    worksheet.repeat_rows(0, 2)  # First row, last row
-
-    # Scale the pages to fit within the page boundaries:
-    worksheet.fit_to_pages(1, 0)
-
-
-def prepare_spreadsheet_get_format(workbook, name):
-    """Function for identifying the format to be used in formatting content in spreadsheet, based on the type of content involved"""
-    if name == "column_headers":  # Column headers
-        return workbook.add_format({"bold": 3, "underline": True, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
-
-    elif name == "data":  # Main body of data (excluding columns to be treated as active URLs)
-        return workbook.add_format({"bold": 0, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
-
-    elif name == "url":  # URLs
-        return workbook.add_format({"bold": 0, "font_color": "blue", "underline": 1, "font_name": "Calibri", "font_size": 11, 'text_wrap': True})
-
-    elif name == "spreadsheet_header":  # Header info. (e.g., title, generation date/time) at beginning of spreadsheet
-        return workbook.add_format({"bold": 3, "font_name": "Calibri", "font_size": 16})
-
-
-
-
-
-
-
-
-def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mismatch_between_summaries):
-    try:
-        if len(rover_earth_date_combo_mismatch_between_summaries) > 0:
-            # From the "photos_available" dictionary, capture a list of all unique rover name / SOL combinations represented in the dictionary:
-            for i in range(0, len(rover_earth_date_combo_mismatch_between_summaries)):
-                print(f"{i + 1} of {len(rover_earth_date_combo_mismatch_between_summaries)} rover/earth date combinations needing update ({round((i+1)/len(rover_earth_date_combo_mismatch_between_summaries) * 100, 1)} %)")
-                photo_details_rover_earth_date_combo = []
-
-                # Report how many records are in the database for the rover-earth date combo:
-                existing_record_count = retrieve_from_database("mars_photo_details_rover_earth_date_combo_count",
-                                                               rover_name=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
-                                                               earth_date=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1])
-
-                if existing_record_count == {}:
-                    existing_record_count = "Not available due to error."
-
-                updated_record_count = \
-                    photos_available[rover_earth_date_combo_mismatch_between_summaries[i]]["total_photos"]
-
-                print(f"Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Total Photos in DB: {existing_record_count}")
-                print(f"Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Total Photos (updated from API): {updated_record_count}")
-
-                print("Update in progress.")
-
-                dict_to_add = get_mars_photos_update_from_api(rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
-                                                                            rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1])
-                if dict_to_add != {}:
-                    # Delete existing records in DB for this rover/earth date combo:
-                    if not update_database("update_mars_photo_details_delete_existing", {},
-                                           rover_name=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0],
-                                           earth_date=rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]):
-                        exit()
-
-                    for j in range(0, len(dict_to_add)):
-                        dict_to_add_sub = {
-                            "rover_earth_date_combo": dict_to_add[j]["rover"]["name"] + "_" + dict_to_add[j][
-                                "earth_date"],
-                            "rover_name": dict_to_add[j]["rover"]["name"],
-                            "sol": dict_to_add[j]["sol"],
-                            "pic_id": dict_to_add[j]["id"],
-                            "earth_date": dict_to_add[j]["earth_date"],
-                            "camera_name": dict_to_add[j]["camera"]["name"],
-                            "camera_full_name": dict_to_add[j]["camera"]["full_name"],
-                            "url": dict_to_add[j]["img_src"]
-                        }
-
-                        photo_details_rover_earth_date_combo.append(dict_to_add_sub)
-
-                    # Update the "mars_photo_details" database table with the contents of the "photo_details_rover_earth_date_combo" list.
-                    # If the function called returns a failed-execution indication, end this procedure:
-                    if not update_database("update_mars_photo_details", photo_details_rover_earth_date_combo):
-                        exit()
-                    else:
-                        print("Update complete.")
-
-        return True
-
-    except Exception as err:  # An error has occurred.
-        # Print error message:
-        print(f"Error (Mars rovers - Perform update): {err}")
-        return False
-
-
-
-
-
-
-
+# Run main function for this application:
+run_app()
+
+# Destroy the object that was created to show user dialog and message boxes:
+dlg.Destroy()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5003)
