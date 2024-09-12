@@ -20,7 +20,7 @@ from selenium.webdriver.common.by import By
 from skyfield.api import load_constellation_names
 from sqlalchemy import Integer, String, Boolean, Float, DateTime, func, distinct
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
 from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField, PasswordField
 from wtforms.validators import InputRequired, Length, Email
 import collections  # Used for sorting items in the constellations dictionary
@@ -65,8 +65,6 @@ def load_user(user_id):
 def admin_only(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        print(current_user.is_authenticated)
-        print(current_user.id)
         # If not the admin then return abort with 403 error:
         if not (current_user.is_authenticated and current_user.id == 1):
             return abort(403)
@@ -75,6 +73,7 @@ def admin_only(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
 
 # CONFIGURE ROUTES FOR WEB PAGES (LISTED IN HIERARCHICAL ORDER STARTING WITH HOME PAGE, THEN ALPHABETICALLY):
 # ***********************************************************************************************************
@@ -91,6 +90,7 @@ def home():
         update_system_log("route: '/'", traceback.format_exc())
         dlg = None
 
+
 # Configure route for "About" web page:
 @app.route('/about')
 def about():
@@ -103,6 +103,7 @@ def about():
         dlg = wx.MessageBox(f"Error (route: '/about'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/about'", traceback.format_exc())
         dlg = None
+
 
 # Configure route for "Administrative Update Login" web page:
 @app.route('/admin_login',methods=["GET", "POST"])
@@ -148,6 +149,23 @@ def admin_login():
         dlg = wx.MessageBox(f"Error (route: '/admin_login'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/admin_login'", traceback.format_exc())
         dlg = None
+
+
+# Configure route for logging out of "Administrative Update":
+@app.route('/admin_logout')
+def admin_logout():
+    try:
+        # Log user out:
+        logout_user()
+
+        # Go to the home page:
+        return redirect(url_for('home'))
+
+    except:  # An error has occurred.
+        dlg = wx.MessageBox(f"Error (route: '/admin_logout'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
+        update_system_log("route: '/admin_logout'", traceback.format_exc())
+        dlg = None
+
 
 # Configure route for "Administrative Update" web page:
 @app.route('/admin_update',methods=["GET", "POST"])
@@ -235,7 +253,7 @@ def admin_update():
                 return render_template("admin_update.html", update_status=update_status, recognition_web_template=recognition["web_template"])
 
         # Go to the "Administrative Update" page:
-        return render_template("admin_update.html", form=form, logged_in=current_user.is_authenticated, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
+        return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/admin_update'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
@@ -291,6 +309,7 @@ def approaching_asteroids():
         dlg = wx.MessageBox(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
         dlg = None
+
 
 # Configure route for "Astronomy Pic of the Day" web page:
 @app.route('/astronomy_pic_of_day')
