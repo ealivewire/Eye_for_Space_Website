@@ -128,8 +128,10 @@ MarsPhotosAvailable = None
 MarsRoverCameras = None
 MarsRovers = None
 SpaceNews = None
+Users = None
 
 # Initialize class variables for web forms:
+AdminLoginForm = None
 AdminUpdateForm = None
 ContactForm = None
 DisplayApproachingAsteroidsSheetForm = None

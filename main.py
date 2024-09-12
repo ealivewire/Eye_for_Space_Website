@@ -4,21 +4,24 @@
 
 # Import necessary library(ies):
 import requests
-from data import app, db, mars_rovers, recognition, spreadsheet_attributes, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CONFIRMED_PLANETS, URL_SPACE_NEWS, URL_PEOPLE_IN_SPACE_NOW, URL_ISS_LOCATION, URL_CONSTELLATION_MAP_SITE, URL_CONSTELLATION_ADD_DETAILS_1, URL_CONSTELLATION_ADD_DETAILS_2A, URL_CONSTELLATION_ADD_DETAILS_2B, URL_MARS_ROVER_PHOTOS_BY_ROVER, URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA, URL_ASTRONOMY_PIC_OF_THE_DAY, URL_GET_LOC_FROM_LAT_AND_LON, API_KEY_CLOSEST_APPROACH_ASTEROIDS, API_KEY_GET_LOC_FROM_LAT_AND_LON, API_KEY_MARS_ROVER_PHOTOS, API_KEY_ASTRONOMY_PIC_OF_THE_DAY, SENDER_EMAIL_GMAIL, SENDER_PASSWORD_GMAIL, SENDER_PORT, SENDER_HOST, WEB_LOADING_TIME_ALLOWANCE
-from data import ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews
-from data import AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
+from data import app, db, mars_rovers, recognition, spreadsheet_attributes, API_KEY_ASTRONOMY_PIC_OF_THE_DAY, API_KEY_CLOSEST_APPROACH_ASTEROIDS, API_KEY_GET_LOC_FROM_LAT_AND_LON, API_KEY_MARS_ROVER_PHOTOS,  SENDER_EMAIL_GMAIL, SENDER_HOST, SENDER_PASSWORD_GMAIL, SENDER_PORT, URL_ASTRONOMY_PIC_OF_THE_DAY, URL_CLOSEST_APPROACH_ASTEROIDS, URL_CONFIRMED_PLANETS, URL_CONSTELLATION_ADD_DETAILS_1, URL_CONSTELLATION_ADD_DETAILS_2A, URL_CONSTELLATION_ADD_DETAILS_2B, URL_CONSTELLATION_MAP_SITE, URL_GET_LOC_FROM_LAT_AND_LON, URL_ISS_LOCATION, URL_MARS_ROVER_PHOTOS_BY_ROVER, URL_MARS_ROVER_PHOTOS_BY_ROVER_AND_OTHER_CRITERIA, URL_PEOPLE_IN_SPACE_NOW, URL_SPACE_NEWS, WEB_LOADING_TIME_ALLOWANCE
+from data import ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews, Users
+from data import AdminLoginForm, AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, abort, render_template, redirect, url_for, request
 from flask_bootstrap import Bootstrap5
+from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
+from functools import wraps  # Used in 'admin_only" decorator function
 from flask_wtf import FlaskForm
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from skyfield.api import load_constellation_names
 from sqlalchemy import Integer, String, Boolean, Float, DateTime, func, distinct
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField
+from werkzeug.security import generate_password_hash, check_password_hash
+from wtforms import EmailField, SelectField, StringField, SubmitField, TextAreaField, BooleanField, PasswordField
 from wtforms.validators import InputRequired, Length, Email
 import collections  # Used for sorting items in the constellations dictionary
 import email_validator
@@ -45,6 +48,34 @@ class Base(DeclarativeBase):
 
 # NOTE: Additional configurations are launched via the "run_app" function defined below.
 
+
+# Configure the Flask login manager:
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+# Implement a user loader callback (to facilitate loading current user into session):
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.execute(db.select(Users).where(Users.id == user_id)).scalar()
+
+
+# Implement a decorator function to ensure that only someone who knows the admin password can access the
+# "administrative update" functionality of the website:
+def admin_only(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        print(current_user.is_authenticated)
+        print(current_user.id)
+        # If not the admin then return abort with 403 error:
+        if not (current_user.is_authenticated and current_user.id == 1):
+            return abort(403)
+
+        # At this point, user is the admin, so proceed with allowing access to the route:
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 # CONFIGURE ROUTES FOR WEB PAGES (LISTED IN HIERARCHICAL ORDER STARTING WITH HOME PAGE, THEN ALPHABETICALLY):
 # ***********************************************************************************************************
 # Configure route for home page:
@@ -54,7 +85,7 @@ def home():
 
     try:
         # Go to the home page:
-        return render_template("index.html", recognition_web_template=recognition["web_template"])
+        return render_template("index.html", logged_in=current_user.is_authenticated, recognition_web_template=recognition["web_template"])
     except:
         dlg = wx.MessageBox(f"Error (route: '/'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/'", traceback.format_exc())
@@ -73,8 +104,54 @@ def about():
         update_system_log("route: '/about'", traceback.format_exc())
         dlg = None
 
+# Configure route for "Administrative Update Login" web page:
+@app.route('/admin_login',methods=["GET", "POST"])
+def admin_login():
+    global db, app
+
+    try:
+        # Instantiate an instance of the "AdminLoginForm" class:
+        form = AdminLoginForm()
+
+        # Validate form entries upon submittal. If validated, send message:
+        if form.validate_on_submit():
+            # Capture the supplied e-mail address and password:
+            username = form.txt_username.data
+            password = form.txt_password.data
+
+            # Check if user account exists under the supplied username:
+            user = db.session.execute(db.select(Users).where(Users.username == username)).scalar()
+            if user != None:  # Account exists under the supplied username.
+                # Check if supplied password matches the salted/hashed password for that account in the db:
+                if check_password_hash(user.password, password):  # Passwords match
+                    # Log user in:
+                    login_user(user)
+
+                    # Go to the "Administrative Update" page:
+                    return redirect(url_for("admin_update"))
+
+                else:  # Passwords do not match.
+                    msg_status = "Password is incorrect.  Please try again."
+
+                    # Go to the "Admin Login" page and display the results of e-mail execution attempt:
+                    return render_template("admin_login.html", form=form, msg_status=msg_status, recognition_web_template=recognition["web_template"])
+
+            else:  # Account does NOT exist under the supplied username.
+                msg_status = "Username is incorrect.  Please try again."
+                return render_template("admin_login.html", form=form, msg_status=msg_status,
+                                       recognition_web_template=recognition["web_template"])
+
+        # Go to the "Admin Login" page:
+        return render_template("admin_login.html", form=form, msg_status="<<Message Being Drafted.>>", recognition_web_template=recognition["web_template"])
+
+    except:  # An error has occurred.
+        dlg = wx.MessageBox(f"Error (route: '/admin_login'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
+        update_system_log("route: '/admin_login'", traceback.format_exc())
+        dlg = None
+
 # Configure route for "Administrative Update" web page:
 @app.route('/admin_update',methods=["GET", "POST"])
+@admin_only
 def admin_update():
     global db, app
 
@@ -158,7 +235,7 @@ def admin_update():
                 return render_template("admin_update.html", update_status=update_status, recognition_web_template=recognition["web_template"])
 
         # Go to the "Administrative Update" page:
-        return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
+        return render_template("admin_update.html", form=form, logged_in=current_user.is_authenticated, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
         dlg = wx.MessageBox(f"Error (route: '/admin_update'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
@@ -169,7 +246,7 @@ def admin_update():
 # Configure route for "Approaching Asteroids" web page:
 @app.route('/approaching_asteroids',methods=["GET", "POST"])
 def approaching_asteroids():
-    global db, app, ViewApproachingAsteroidsForm, DisplayApproachingAsteroidsSheetForm
+    global db, app
 
     try:
         # Instantiate an instance of the "ViewApproachingAsteroidsForm" class:
@@ -503,7 +580,7 @@ def close_workbook(workbook):
 
 def config_database():
     """Function for configuring the database tables supporting this website"""
-    global db, app, ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews
+    global db, app, ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPhotoDetails, MarsPhotosAvailable, MarsRoverCameras, MarsRovers, SpaceNews, Users
 
     try:
         # Create the database object using the SQLAlchemy constructor:
@@ -592,6 +669,12 @@ def config_database():
             date_time_updated: Mapped[datetime] = mapped_column(DateTime, nullable=True)
             url: Mapped[str] = mapped_column(String(500), nullable=False)
 
+        class Users(UserMixin, db.Model):
+            __tablename__ = "users"
+            id: Mapped[int] = mapped_column(Integer, primary_key=True)
+            username: Mapped[str] = mapped_column(String(100), unique=True)
+            password: Mapped[str] = mapped_column(String(100))
+
         # Configure the database per the above.  If needed tables do not already exist in the DB, create them:
         with app.app_context():
             db.create_all()
@@ -609,10 +692,16 @@ def config_database():
 
 def config_web_forms():
     """Function for configuring the web forms supporting this website"""
-    global AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
+    global AdminLoginForm, AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
 
     try:
         # CONFIGURE WEB FORMS (LISTED IN ALPHABETICAL ORDER):
+        # Configure "admin_update" form:
+        class AdminLoginForm(FlaskForm):
+            txt_username = StringField(label="Username:", validators=[InputRequired()])
+            txt_password = PasswordField(label="Password:", validators=[InputRequired()])
+            button_submit = SubmitField(label="Login")
+
         # Configure "admin_update" form:
         class AdminUpdateForm(FlaskForm):
             chk_approaching_asteroids = BooleanField(label="Approaching Asteroids", default=True)
