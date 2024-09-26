@@ -9,7 +9,7 @@ from data import ApproachingAsteroids, ConfirmedPlanets, Constellations, MarsPho
 from data import AdminLoginForm, AdminUpdateForm, ContactForm, DisplayApproachingAsteroidsSheetForm, DisplayConfirmedPlanetsSheetForm, DisplayConstellationSheetForm, DisplayMarsPhotosSheetForm, ViewApproachingAsteroidsForm, ViewConfirmedPlanetsForm, ViewConstellationForm, ViewMarsPhotosForm
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask import Flask, abort, render_template, redirect, url_for, request
+from flask import Flask, abort, render_template, redirect, url_for
 from flask_bootstrap import Bootstrap5
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user
 from flask_sqlalchemy import SQLAlchemy
@@ -80,35 +80,36 @@ def admin_only(f):
 # Configure route for home page:
 @app.route('/')
 def home():
-    global db, app
+    global db, app, dlg
 
     try:
         # Go to the home page:
         return render_template("index.html", logged_in=current_user.is_authenticated, recognition_web_template=recognition["web_template"])
     except:
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/'", traceback.format_exc())
-        dlg = None
 
 
 # Configure route for "About" web page:
 @app.route('/about')
 def about():
-    global db, app
+    global db, app, dlg
 
     try:
         # Go to the "About" page:
         return render_template("about.html", recognition_web_template=recognition["web_template"])
     except:
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/about'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/about'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Administrative Update Login" web page:
 @app.route('/admin_login',methods=["GET", "POST"])
 def admin_login():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "AdminLoginForm" class:
@@ -146,14 +147,16 @@ def admin_login():
         return render_template("admin_login.html", form=form, msg_status="<<Message Being Drafted.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/admin_login'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/admin_login'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for logging out of "Administrative Update":
 @app.route('/admin_logout')
 def admin_logout():
+    global dlg
     try:
         # Log user out:
         logout_user()
@@ -162,16 +165,17 @@ def admin_logout():
         return redirect(url_for('home'))
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/admin_logout'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/admin_logout'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Administrative Update" web page:
 @app.route('/admin_update',methods=["GET", "POST"])
 @admin_only
 def admin_update():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "AdminUpdateForm" class:
@@ -233,6 +237,7 @@ def admin_update():
 
             # Check if the user has selected at least one of the items to update.  If not, prompt user to select one:
             if not (update_status_approaching_asteroids != "" or update_status_confirmed_planets != "" or update_status_constellations != "" or update_status_mars_photos != ""):
+                dlg = wx.App()
                 dlg = wx.MessageBox(f"Please select at least one of the items to update.", 'Administrative Update', wx.OK | wx.ICON_INFORMATION)
                 dlg = None
 
@@ -256,15 +261,16 @@ def admin_update():
         return render_template("admin_update.html", form=form, update_status="<<Update Choices to be Made.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/admin_update'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/admin_update'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Approaching Asteroids" web page:
 @app.route('/approaching_asteroids',methods=["GET", "POST"])
 def approaching_asteroids():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "ViewApproachingAsteroidsForm" class:
@@ -306,15 +312,16 @@ def approaching_asteroids():
         return render_template('approaching_asteroids.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["approaching_asteroids"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/approaching_asteroids'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/approaching_asteroids'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Astronomy Pic of the Day" web page:
 @app.route('/astronomy_pic_of_day')
 def astronomy_pic_of_day():
-    global db, app
+    global db, app, dlg
 
     try:
         # Get details re: the astronomy picture of the day:
@@ -324,15 +331,16 @@ def astronomy_pic_of_day():
         return render_template("astronomy_pic_of_day.html", json=json, copyright_details=copyright_details, error_msg=error_msg, recognition_scope_specific=recognition["astronomy_pic_of_day"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/astronomy_pic_of_day'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/astronomy_pic_of_day'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Confirmed Planets" web page:
 @app.route('/confirmed_planets',methods=["GET", "POST"])
 def confirmed_planets():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "ViewConstellationForm" class:
@@ -374,15 +382,16 @@ def confirmed_planets():
         return render_template('confirmed_planets.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["confirmed_planets"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/confirmed_planets'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/confirmed_planets'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Constellations" web page:
 @app.route('/constellations',methods=["GET", "POST"])
 def constellations():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "ViewConstellationForm" class:
@@ -418,15 +427,16 @@ def constellations():
         return render_template('constellations.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["constellations"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/constellations'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/constellations'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Contact Us" web page:
 @app.route('/contact',methods=["GET", "POST"])
 def contact():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "ContactForm" class:
@@ -444,15 +454,16 @@ def contact():
         return render_template("contact.html", form=form, msg_status="<<Message Being Drafted.>>", recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/contact'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/contact'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Photos from Mars" web page:
 @app.route('/mars_photos',methods=["GET", "POST"])
 def mars_photos():
-    global db, app
+    global db, app, dlg
 
     try:
         # Instantiate an instance of the "ViewConstellationForm" class:
@@ -494,15 +505,16 @@ def mars_photos():
         return render_template('mars_photos.html', form=form, form_ss=form_ss, recognition_scope_specific=recognition["mars_photos"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/mars_photos'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/mars_photos'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Space News" web page:
 @app.route('/space_news')
 def space_news():
-    global db, app
+    global db, app, dlg
 
     try:
         # Get results of obtaining and processing the desired information:
@@ -523,15 +535,16 @@ def space_news():
         return render_template("space_news.html", articles=articles, success=success, error_msg=error_msg, recognition_scope_specific=recognition["space_news"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/space_news'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/space_news'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Where is ISS" web page:
 @app.route('/where_is_iss')
 def where_is_iss():
-    global db, app
+    global db, app, dlg
 
     try:
         # Get ISS's current location along with a URL to get a map plotting said location:
@@ -541,15 +554,16 @@ def where_is_iss():
         return render_template("where_is_iss.html", location_address=location_address, location_url=location_url, has_url=not(location_url == ""), recognition_scope_specific=recognition["where_is_iss"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/where_is_iss'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/where_is_iss'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # Configure route for "Who is in Space Now" web page:
 @app.route('/who_is_in_space_now')
 def who_is_in_space_now():
-    global db, app
+    global db, app, dlg
 
     try:
         # Get results of obtaining a JSON with the desired information:
@@ -559,9 +573,10 @@ def who_is_in_space_now():
         return render_template("who_is_in_space_now.html", json=json, has_json=has_json, recognition_scope_specific=recognition["who_is_in_space_now"], recognition_web_template=recognition["web_template"])
 
     except:  # An error has occurred.
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error (route: '/who_is_in_space_now'): {traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
         update_system_log("route: '/who_is_in_space_now'", traceback.format_exc())
-        dlg = None
+        return redirect(url_for("home"))
 
 
 # DEFINE FUNCTIONS TO BE USED FOR THIS APPLICATION (LISTED IN ALPHABETICAL ORDER BY FUNCTION NAME):
@@ -1113,7 +1128,6 @@ def export_mars_photos_to_spreadsheet(photos_available, photo_details):
                 f"Photos from Mars: Spreadsheet file 'Mars Photos - Details - {worksheets_needed[i][0]}.xlsx': Saving completed...",title="Administrative Update")
 
         # Return successful-execution indication to the calling function:
-        dlg = None
         return True
 
     except:  # An error has occurred.
@@ -2071,7 +2085,6 @@ def get_mars_photos_update_database(photos_available, rover_earth_date_combo_mis
                         dlg = PBI.PyBusyInfo(f"Photos from Mars: Rover '{rover_earth_date_combo_mismatch_between_summaries[i].split("_")[0]}', Earth Date {rover_earth_date_combo_mismatch_between_summaries[i].split("_")[1]} - Update complete.",title="Administrative Update")
 
         # At this point, function is deemed to have executed successfully.  Return successful-execution indication to the calling function:
-        dlg = None
         return "", True
 
     except:  # An error has occurred.
@@ -2797,6 +2810,8 @@ def update_database(trans_type, item_to_process, **kwargs):
 
 def update_system_log(activity, log):
     """Function to update the system log, either to log errors encountered or log successful execution of milestone admin. updates"""
+    global dlg
+
     try:
         # Capture current date/time:
         current_date_time = datetime.now()
@@ -2811,8 +2826,8 @@ def update_system_log(activity, log):
         f.close()
 
     except:
+        dlg = wx.App()
         dlg = wx.MessageBox(f"Error: System log could not be updated.\n{traceback.format_exc()}", 'Error', wx.OK | wx.ICON_INFORMATION)
-        dlg = None
 
 
 # Run main function for this application:
